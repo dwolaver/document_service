@@ -29,8 +29,9 @@ rules:
       complete; the repository owner then merges as long as CI still passes, so that the code,
       spec and archive land as one commit on main.
     - >-
-      Depart from that flow only when a change has work that can only happen after merge, and
-      state the reason in the Workflow follow-up section.
+      Depart from that flow only when a change has work that can only happen after merge. State
+      the reason in the Workflow follow-up section, and add the merge-before-archive label to its
+      pull request.
 
 # Per-operation guidance (optional)
 # Add advisory guidance for how apply and archive work should be conducted.

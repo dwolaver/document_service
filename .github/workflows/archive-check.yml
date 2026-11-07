@@ -1,0 +1,42 @@
+name: Archive check
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  archive-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check for unarchived OpenSpec changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HAS_EXCEPTION_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'merge-before-archive') }}
+        run: |
+          unarchived=$(git diff --name-only --no-renames --diff-filter=d "$BASE_SHA...$HEAD_SHA" \
+            -- openspec/changes/ ':(exclude)openspec/changes/archive/')
+
+          if [ -z "$unarchived" ]; then
+            echo "No unarchived OpenSpec changes."
+            exit 0
+          fi
+
+          echo "This pull request adds or modifies active OpenSpec changes:"
+          echo "$unarchived"
+
+          if [ "$HAS_EXCEPTION_LABEL" = "true" ]; then
+            echo "Passing because of the merge-before-archive label."
+            exit 0
+          fi
+
+          echo "Run /opsx:archive on this branch before merging. If the change has work that"
+          echo "can only happen after merge, add the merge-before-archive label instead."
+          exit 1

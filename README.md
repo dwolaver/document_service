@@ -48,6 +48,12 @@ Changes reach `main` through pull requests. GitHub Actions runs the tests on eac
 and on each push to `main`, without network access to external document sources, and a pull
 request can't merge until they pass.
 
+Each change is reviewed, then archived on its branch, then merged, so that the code, spec and
+archive land as one commit. The `archive-check` check enforces this by failing while a pull request
+adds or modifies files in an active OpenSpec change, so it's expected to fail during review. If a
+change has work that can only happen after merge, the `merge-before-archive` label passes this
+check. It doesn't affect any other check, so the tests must still pass.
+
 ## Building the index
 
 Ingestion downloads any missing RFCs into `data/`, then builds the search index at `data/index.db`.
