@@ -1,6 +1,6 @@
 # Architecture
 
-Generated from commit a7fc62b by claude-opus-5-5, for release v0.1.0.
+Generated from commit d0517bb by claude-opus-5-5, for release v0.1.0.
 
 ## Overview
 
@@ -319,7 +319,7 @@ Generated files, git-ignored under `data/`:
 - `data/index.db`: a SQLite database with a `metadata` table (`key`, `value`, both text) holding the
   `IngestConfig.as_metadata()` values (`embedding_model_name`, `embedding_max_tokens`,
   `chars_per_token`, `target_chunk_tokens`, `max_chunk_chars`), a `chunks` table with one row per
-  `Chunk` field, and an external-content FTS5 table `chunks_fts` over `section_title` and `text` with
+  chunk, holding an integer `id` and a column for each `Chunk` field, and an external-content FTS5 table `chunks_fts` over `section_title` and `text` with
   the `porter unicode61` tokenizer.
 
 Chunk IDs have the form `rfc<number>-s<section>[-<n>]-p<position>`, for example
@@ -354,7 +354,8 @@ Considerations` sections use the section numbers `abstract` and `security`.
   `section_number: str`, `section_title: str`, `text: str`.
 - `split_text(text, max_chars) -> list[str]`: returns parts of at most `max_chars`, packing
   paragraphs greedily, then lines for an oversized paragraph, and cutting a line only when it can't
-  fit alone. Whitespace-only text returns an empty list. There is no overlap.
+  fit alone. Whitespace-only text no longer than `max_chars` returns an empty list. There is no
+  overlap.
 - `chunk_sections(sections, rfc_number, rfc_title, family, max_chars) -> list[Chunk]`: chunks one
   RFC's sections and assigns chunk IDs. Sections with no body text produce no chunks.
 
