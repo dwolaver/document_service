@@ -3,7 +3,7 @@
 ## Context
 
 See proposal.md - Why. The decisions below were made during exploration, before
-`add-answer-generation`. Check them against the code when this change resumes.
+`add-answer-generation`, and were checked again when this change resumed.
 
 The repository has no `ARCHITECTURE.md`, no tags and no releases. `main` requires a pull request,
 with `test` and `archive-check` as required checks. Project skills live in `.claude/skills/`. The
@@ -22,7 +22,22 @@ The Claude Code documentation was reviewed in November 2026 for how skills handl
   There is no `$CLAUDE_MODEL` variable.
 - Headless JSON output reports the model actually used, in the `modelUsage` field of the result.
 
-Parts of this came from summaries of long pages, so confirm them before relying on them.
+Parts of this came from summaries of long pages, so they were tested when this change resumed, using
+Claude Code 2.1.319 in headless mode on a throwaway project:
+
+| Test | Result |
+|---|---|
+| `--model` names an unknown model | Exit status 1 and an `unrecognized_model` message |
+| `--model claude-opus-5-5` with a plain prompt | `modelUsage` listed `claude-opus-5-5` and also `claude-haiku-5-5`, and the Haiku helper produced more output tokens |
+| A skill run as `/probe` with `Read` and `Write` allowed | Ran, wrote its file, and listed only `claude-opus-5-5` |
+| Session `--model claude-haiku-5-5`, skill `model: claude-opus-5-5` | The skill's model was used, and only `claude-opus-5-5` was listed |
+| Skill `model:` names an unknown model | Exit status 1, `is_error` true with a "There's an issue with the selected model" result, no output file, and `subtype` still `success` |
+
+So an unknown or unavailable model in a skill fails closed in headless mode, which is better than the
+documentation suggested. A model blocked by an organization's `availableModels` allowlist couldn't
+be tested, because this account has no such policy, and the documentation says it's replaced
+silently. A configured fallback model could also take over. The script covers both, and the helper
+model rules out requiring exactly one entry in `modelUsage`.
 
 ## Goals / Non-Goals
 
@@ -107,15 +122,21 @@ Parts of this came from summaries of long pages, so confirm them before relying 
 - **Pin the full model ID, starting with `claude-opus-5-5`**: An alias like `opus` moves to a newer
   model without anyone deciding to. Changing the ID is a one-line edit that shows up in a pull request.
 
-- **`scripts/update-architecture.sh` enforces the model**:
+- **`scripts/update_architecture.py` enforces the model**:
 
   ```
-  read the pinned model from SKILL.md
-    --> claude -p "/update-architecture" --model <pinned> --output-format json
-    --> check modelUsage
-          matches: keep ARCHITECTURE.md for review
-          anything else, or any error: restore the file, exit non-zero
+  refuse if ARCHITECTURE.md has uncommitted changes
+  read the pinned model from SKILL.md (one place to change it)
+    --> claude -p "/update-architecture <release>" --model <pinned> --output-format json
+    --> accept only if the run succeeded and the pinned model did the main work
+          accepted: keep ARCHITECTURE.md for review
+          rejected: restore the file, exit non-zero
   ```
+
+  A run is accepted when the exit status is 0, `is_error` is false, the pinned model appears in
+  `modelUsage`, and it produced more output tokens than any other model listed. The last rule allows
+  the small helper model the tests found, while rejecting a fallback or substitute model, which would
+  do the bulk of the writing. `subtype` isn't used, because it reported `success` for a failed run.
 
   The skill's own `model` field can't refuse, as described in Context. A slash command inside a session
   was rejected for this reason: it would be more convenient, but it could only self-report. This is a
@@ -126,6 +147,23 @@ Parts of this came from summaries of long pages, so confirm them before relying 
   state clearly that the script can be removed in favor of the skill alone once a model mismatch can
   refuse to run.
 
+- **Python rather than shell**: The script's work is parsing JSON and applying the rule above. In
+  Python, that logic is unit-tested offline in CI like the rest of the project, with the `claude`
+  call replaced. A shell script would need `jq` and could only be checked by running it.
+
+- **Limit the headless run's tools**: The run allows only `Read`, `Glob`, `Grep`, `Write`, `Edit`, and
+  `git log`, `git diff`, `git show` and `git rev-parse`, with edits accepted. If the run changes any
+  file other than `ARCHITECTURE.md`, the script rejects it and lists the files, without reverting
+  them, so nothing is deleted on the owner's behalf.
+
+- **The release is passed to the skill**: `python scripts/update_architecture.py v0.1.0` runs
+  `/update-architecture v0.1.0`, and the version goes in the header.
+
+- **New key decisions start unreviewed**: A decision the generator adds has status `New` and no
+  `Last reviewed` value. The owner sets `Current` and the release when reviewing the pull request.
+  That keeps to the rule that only the owner marks a decision as reviewed, including in the first
+  file.
+
 - **The skill also checks its own model first**: Its first step tells the model to stop if it isn't the
   pinned one. This catches most mismatches early, but it's self-reporting, so it doesn't replace the
   script.
@@ -135,15 +173,16 @@ Parts of this came from summaries of long pages, so confirm them before relying 
   in meaning. The owner then validates the file in more detail than a normal update.
 
 - **Release flow**: Create a branch, run the script, open a pull request, the owner reviews and merges,
-  then tag the release.
+  then tag the release. This change produces the first file, for v0.1.0, and the owner tags v0.1.0
+  after merging.
 
 - **The tooling follows OpenSpec, and its output doesn't**: `archive-check` applies to this change as
   normal, and later `ARCHITECTURE.md` updates pass it because they don't touch active changes.
 
 ## Risks / Trade-offs
 
-- [`modelUsage` lists a small helper model as well] → Tested when this change resumes. The check would
-  then confirm which model did the main work, rather than requiring exactly one entry.
+- [`modelUsage` lists a small helper model as well] → Confirmed by testing. The check requires the pinned
+  model to produce the most output, rather than exactly one entry.
 - [A configured fallback model swaps models mid-run] → The script's check rejects the result, and no
   fallback should be configured for this run.
 - [The script restores `ARCHITECTURE.md` over wanted local edits] → It refuses to start if the file has
@@ -152,17 +191,12 @@ Parts of this came from summaries of long pages, so confirm them before relying 
   reviewed at every release.
 - [Generated text sounds right but is wrong] → Verification covers named items, and the owner reviews
   the meaning in the pull request.
-- [Headless mode needs permission for the tools the skill uses] → Tested when this change resumes, with
-  access limited to what the skill needs.
+- [Headless mode needs permission for the tools the skill uses] → Confirmed by testing, and access is
+  limited to the tools listed above.
+- [The helper model's share grows in a future version] → On a real generation the pinned model writes
+  thousands of tokens. If the rule ever rejects a good run, the rejection message shows the token
+  counts, so the rule can be reviewed.
 
 ## Open Questions
 
-- The version scheme and what defines a release. `v0.1.0` once step 1 gives a working RAG answer is the
-  likely first release.
-
-## To Test When Resuming
-
-- Whether a bad or unavailable model name makes `claude -p --model` fail cleanly.
-- Whether `modelUsage` can list more than one model for a run, and what a mismatch looks like.
-- Whether a slash command runs in headless mode as planned, and which permissions it needs.
-- Whether the documentation findings in Context are still current.
+- The version scheme after v0.1.0, which can be settled at the next release.
