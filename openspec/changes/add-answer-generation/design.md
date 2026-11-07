@@ -107,9 +107,12 @@ answers too.
 
   New fields have defaults, so the existing construction calls keep working.
 
-- **Error codes keep their numbers**: `INVALID_QUERY` stays 1. `NOT_IMPLEMENTED` is removed, and 2 is
-  not reused, so that an old value can't be mistaken for a new meaning. The new codes are
-  `INDEX_UNAVAILABLE` 3, `MODEL_UNAVAILABLE` 4, `MODEL_INVALID_RESPONSE` 5 and `CONFIG_INVALID` 6.
+- **Error codes stay consecutive until the first release**: `INVALID_QUERY` stays 1. `NOT_IMPLEMENTED`
+  is removed, and the new codes are `INDEX_UNAVAILABLE` 2, `MODEL_UNAVAILABLE` 3,
+  `MODEL_INVALID_RESPONSE` 4 and `CONFIG_INVALID` 5. There hasn't been a release, so no outside
+  caller depends on the old value, and reusing 2 keeps the numbering simple. Retiring 2 was
+  considered and rejected for that reason. After the first release, a removed value is retired and
+  not reused, so that an old value can't be mistaken for a new meaning.
 
 - **`query_config.json`**:
 

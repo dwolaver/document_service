@@ -35,14 +35,15 @@ COLD_START_THRESHOLD_MS = 500
 class QueryErrorCode(IntEnum):
     """Enumerated failure kinds carried by a :class:`QueryResponse`.
 
-    Value 2 was ``NOT_IMPLEMENTED`` and is retired, so it isn't reused.
+    Values may be renumbered until the first release. After that, a removed value is retired and not
+    reused.
     """
 
     INVALID_QUERY = 1
-    INDEX_UNAVAILABLE = 3
-    MODEL_UNAVAILABLE = 4
-    MODEL_INVALID_RESPONSE = 5
-    CONFIG_INVALID = 6
+    INDEX_UNAVAILABLE = 2
+    MODEL_UNAVAILABLE = 3
+    MODEL_INVALID_RESPONSE = 4
+    CONFIG_INVALID = 5
 
 
 @dataclass(frozen=True)

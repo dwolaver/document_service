@@ -3,7 +3,7 @@
 ## 1. Configuration and response shape
 
 - [x] 1.1 Add `query_config.json` with the values from design.md, and loading in `query.py` that validates each value and resolves a relative `index_path` from the repository root; verify unit tests cover a valid file and missing, wrong-type and non-positive values
-- [x] 1.2 Add `Citation`, `Timings`, the `found`, `citations` and `timings` fields on `QueryResponse`, and the new error codes, removing `NOT_IMPLEMENTED` without reusing 2; verify unit tests check field defaults and each code's integer value
+- [x] 1.2 Add `Citation`, `Timings`, the `found`, `citations` and `timings` fields on `QueryResponse`, and the new error codes, removing `NOT_IMPLEMENTED` and numbering the codes consecutively from 2, since there hasn't been a release; verify unit tests check field defaults and each code's integer value
 
 ## 2. Answer generation
 

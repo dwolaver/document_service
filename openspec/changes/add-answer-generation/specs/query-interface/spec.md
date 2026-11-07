@@ -59,4 +59,5 @@ status.
 not found.
 
 **Migration**: Handle `success`, `found` and `citations` on the response. The `NOT_IMPLEMENTED`
-error code is no longer returned, and its value, 2, is not reused.
+error code is removed. There hasn't been a release, so its value, 2, is reused for
+`INDEX_UNAVAILABLE`.
