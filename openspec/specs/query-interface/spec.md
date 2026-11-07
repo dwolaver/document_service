@@ -3,8 +3,8 @@
 ## Purpose
 
 Provides the service's main entry point for submitting a natural-language query about RFCs
-and receiving a structured response, with an answer drawn from the indexed RFCs and its
-citations, or a clear failure.
+and receiving a structured response: a cited answer from the indexed RFCs, a result saying
+they don't answer it, or a clear failure.
 
 ## Requirements
 
