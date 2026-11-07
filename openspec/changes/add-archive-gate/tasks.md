@@ -13,10 +13,10 @@
 
 ## 3. Pull request verification
 
-- [ ] 3.1 Commit to the `add-archive-gate` branch and open a pull request against `main`; verify `test` passes, and that `archive-check` runs and fails, naming this change's files
-- [ ] 3.2 Add `archive-check` to the required status checks in the `main` ruleset (manual repository setting); verify `gh api repos/dwolaver/document_service/rules/branches/main` lists it, and that the pull request's merge state is `BLOCKED`
-- [ ] 3.3 Add the `merge-before-archive` label to the pull request; verify `archive-check` re-runs without a new commit and passes, and that `test` is unaffected
-- [ ] 3.4 Remove the label; verify `archive-check` re-runs and fails, and that the merge state returns to `BLOCKED`
+- [x] 3.1 Commit to the `add-archive-gate` branch and open a pull request against `main`; verify `test` passes, and that `archive-check` runs and fails, naming this change's files
+- [x] 3.2 Add `archive-check` to the required status checks in the `main` ruleset (manual repository setting); verify `gh api repos/dwolaver/document_service/rules/branches/main` lists it, and that the pull request's merge state is `BLOCKED`
+- [x] 3.3 Add the `merge-before-archive` label to the pull request; verify `archive-check` re-runs without a new commit and passes, and that `test` is unaffected
+- [x] 3.4 Remove the label; verify `archive-check` re-runs and fails, and that the merge state returns to `BLOCKED`
 
 ## Workflow follow-up
 
