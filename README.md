@@ -30,6 +30,24 @@ and designs record what was decided, why, and which alternatives were rejected.
                                     +--- index store --+
 ```
 
+## Development
+
+The project uses Python 3.14. To install the dependencies and run the tests:
+
+```
+python3.14 -m venv venv
+source venv/bin/activate
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+Use `python -m pytest` rather than bare `pytest`, because the modules sit at the repository root.
+The network integration test is skipped unless `RFC_DOWNLOADER_NETWORK_TESTS=1` is set.
+
+Changes reach `main` through pull requests. GitHub Actions runs the tests on each pull request
+and on each push to `main`, without network access to external document sources, and a pull
+request can't merge until they pass.
+
 ## Roadmap
 
 The RFC downloader and the top-level query interface are complete. A valid query currently
