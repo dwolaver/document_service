@@ -13,8 +13,8 @@
 
 ## 3. First generation
 
-- [ ] 3.1 Run `python scripts/update_architecture.py v0.1.0` to create `ARCHITECTURE.md`; verify the run is accepted, the header matches the spec, the sections are in order with Mermaid diagrams, and key decisions are marked `New`
-- [ ] 3.2 Check every file, function, class and command named in `ARCHITECTURE.md` against the code, and that no underscore names or planned features appear; verify by a script that lists names not found in the code, with each one fixed or explained
+- [x] 3.1 Run `python scripts/update_architecture.py v0.1.0` to create `ARCHITECTURE.md`; verify the run is accepted, the header matches the spec, the sections are in order with Mermaid diagrams, and key decisions are marked `New`
+- [x] 3.2 Check every file, function, class and command named in `ARCHITECTURE.md` against the code, and that no underscore names or planned features appear; verify by a script that lists names not found in the code, with each one fixed or explained
 - [ ] 3.3 Run the script again with no code changes; verify the run is accepted, the key decisions are unchanged, and any other differences are explained
 - [ ] 3.4 Point `SKILL.md` at a model that isn't available, and run the script; verify it exits non-zero, reports the error, and leaves `ARCHITECTURE.md` as committed, then restore `SKILL.md`
 
