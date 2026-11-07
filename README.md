@@ -10,28 +10,14 @@ and designs record what was decided, why, and which alternatives were rejected.
 
 ## Approach
 
-- **Corpus:** a curated set of HTTP, TLS and TCP RFCs. It deliberately includes obsolete pairs,
-  such as RFC 793 and RFC 9293.
-- **Obsolete RFCs:** every RFC is indexed. Labeling each with its status, and preferring current
-  RFCs unless a question asks for older ones, is planned for step 3. The improvement is measured
-  with a stale citation rate: how often an answer cites an obsolete RFC when the question didn't
-  ask for one.
-- **Models:** local open-weight models served by Ollama, with `llama3.2` for generation and
-  `nomic-embed-text` for embeddings. Both are configurable, and a larger model will be compared
-  against this baseline.
-- **Citations:** passages are labeled `P1`, `P2` and so on for the model, and code maps the labels
-  it cites back to chunks, dropping any that weren't retrieved. This proves a cited passage was
-  retrieved, not that it supports the answer. `llama3.2` sometimes answers a question the corpus
-  doesn't cover from its own knowledge, while citing real passages. Step 2 measures how often.
-- **Ingestion and querying are separate:** an offline step builds the index, and the Docker image
-  contains that index for a stateless query service to use.
+[ARCHITECTURE.md](ARCHITECTURE.md) describes how the system works, from an overview down to its
+interfaces, with diagrams and the key decisions behind it. In short:
 
-```
- OFFLINE (batch job)                      ONLINE (stateless service)
- download --> parse --> chunk --> index   query --> retrieve --> generate --> cite
-                                    |                  ^
-                                    +--- index store --+
-```
+- A curated set of 59 HTTP, TLS and TCP RFCs, deliberately including obsolete RFCs alongside the ones
+  that replaced them.
+- An offline ingestion step that parses RFCs into sections and chunks, and builds a keyword index.
+- A query step that retrieves passages and asks a local `llama3.2` model, served by Ollama, to answer
+  only from them, with citations that code checks against what was retrieved.
 
 ## Development
 
@@ -113,6 +99,24 @@ that happened. From Python, `query.query()` returns the same result, with timing
 [`query_config.json`](query_config.json) sets the model, the Ollama address, the context window,
 the answer length limit, the request timeout and how many passages to retrieve. A query fails before
 calling the model if those passages and the answer wouldn't fit in the context window.
+
+## Updating ARCHITECTURE.md
+
+`ARCHITECTURE.md` is generated from the source code just before each release, and reviewed in a pull
+request. It doesn't go through the OpenSpec process. From a release branch:
+
+```
+python scripts/update_architecture.py v0.1.0
+```
+
+The script runs the `update-architecture` skill in headless Claude Code with the model pinned in
+[its `SKILL.md`](.claude/skills/update-architecture/SKILL.md), and keeps the result only if that
+model did the work. Otherwise it restores the file and exits with an error. Commit or discard any
+edits to `ARCHITECTURE.md` first, because the script won't run over them.
+
+The run reports the key decisions it added or flagged for review, and the assumptions it can't check
+from the code. Only the repository owner marks a decision as reviewed. Changing the pinned model is a
+deliberate edit to `SKILL.md`, and the next run regenerates the file for a more thorough review.
 
 ## Roadmap
 

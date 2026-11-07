@@ -16,16 +16,16 @@
 - [x] 3.1 Run `python scripts/update_architecture.py v0.1.0` to create `ARCHITECTURE.md`; verify the run is accepted, the header matches the spec, the sections are in order with Mermaid diagrams, and key decisions are marked `New`
 - [x] 3.2 Check every file, function, class and command named in `ARCHITECTURE.md` against the code, and that no underscore names or planned features appear; verify by a script that lists names not found in the code, with each one fixed or explained
 - [x] 3.3 Run the script again with no code changes; verify the run is accepted, the key decisions are unchanged, and any other differences are explained
-- [ ] 3.4 Point `SKILL.md` at a model that isn't available, and run the script; verify it exits non-zero, reports the error, and leaves `ARCHITECTURE.md` as committed, then restore `SKILL.md`
+- [x] 3.4 Point `SKILL.md` at a model that isn't available, and run the script; verify it exits non-zero, reports the error, and leaves `ARCHITECTURE.md` as committed, then restore `SKILL.md`
 
 ## 4. Documentation
 
-- [ ] 4.1 Replace the README's approach section and diagram with a short summary that links to `ARCHITECTURE.md`, and add a short section on updating it before a release; verify the links work and the documented command matches the script
+- [x] 4.1 Replace the README's approach section and diagram with a short summary that links to `ARCHITECTURE.md`, and add a short section on updating it before a release; verify the links work and the documented command matches the script
 
 ## Workflow follow-up
 
 - Open a pull request from `add-architecture-generator`. The `test` check must pass, and `archive-check` is expected to fail until the archive.
 - The repository owner reviews the code and the generated `ARCHITECTURE.md`, and sets each reviewed key decision to `Current` for v0.1.0. Any changes are made on this branch, in the active change, and `test` must pass again.
-- Archive the change on this branch as the last step, which makes the change complete and turns `archive-check` green.
+- Archive the change on this branch as the last step, which makes the change complete and turns `archive-check` green. In the same step, update the Source link in the last key decision in `ARCHITECTURE.md`, which points to this change's active design and will move to the archive.
 - The repository owner squash merges once both checks pass, so that the code, spec, archive and first `ARCHITECTURE.md` land as one commit on `main`.
 - Tagging v0.1.0 after the merge is part of the release, not this change, so the normal flow applies and no label is needed.
