@@ -1,0 +1,65 @@
+
+
+
+
+Network Working Group                              Internet Engineering Task Force
+Request for Comments: 1122                                  October 1989
+
+
+        Requirements for Internet Hosts -- Communication Layers
+
+Status of This Memo
+
+   This RFC is an official specification for the Internet community.
+
+                            Table of Contents
+
+   1.  INTRODUCTION ...............................................    5
+      1.1  The Internet Architecture ..............................    6
+         1.1.1  Internet Hosts ....................................    6
+   2.  TRANSPORT PROTOCOLS ........................................   77
+         2.2.2.8  TCP Connection State Diagram ....................   86
+
+Internet Engineering Task Force                                 [Page 2]
+
+RFC1122                       INTRODUCTION                  October 1989
+
+
+1.  INTRODUCTION
+
+   This document is one of a pair that defines host requirements.
+
+   1.1  The Internet Architecture
+
+      A host computer is any computer attached to the network.
+
+      1.1.1  Internet Hosts
+
+         A host must follow these rules:
+
+         1.  Send datagrams.
+
+         2.  Receive datagrams.
+
+         The rules above are complete.
+
+2.  TRANSPORT PROTOCOLS
+
+   This section covers transport.
+
+   2.2  TRANSMISSION CONTROL PROTOCOL
+
+         2.2.2.8  TCP Connection State Diagram: RFC-793 Section 3.2,
+            page 23
+
+            There are several problems with this diagram.
+
+Security Considerations
+
+   There are many security issues in the communication layers.
+
+Author's Address
+
+   Robert Braden
+
+Internet Engineering Task Force                               [Page 116]

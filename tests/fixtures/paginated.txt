@@ -1,0 +1,84 @@
+
+
+
+
+Network Working Group                                        R. Fielding
+Request for Comments: 2616                                     June 1999
+Obsoletes: 2068
+Category: Standards Track
+
+
+                 Hypertext Transfer Protocol -- HTTP/1.1
+
+Status of this Memo
+
+   This document specifies an Internet standards track protocol.
+
+Copyright Notice
+
+   Copyright (C) The Internet Society (1999).  All Rights Reserved.
+
+Abstract
+
+   The Hypertext Transfer Protocol (HTTP) is an application-level
+   protocol.
+
+Table of Contents
+
+   1   Introduction ...................................................7
+   2   Caching in HTTP ...............................................74
+      2.1.1 Cache Correctness ........................................75
+
+Fielding, et al.            Standards Track                     [Page 1]
+
+RFC 2616                        HTTP/1.1                       June 1999
+
+
+1 Introduction
+
+   The HTTP protocol is a request/response protocol.
+
+1.1 Purpose
+
+   HTTP has been in use since 1990.
+
+   1. The first numbered item.
+
+   2. The second numbered item.
+
+2 Caching in HTTP
+
+   HTTP is typically used for distributed information systems, where
+   performance can be improved by the use of response caches, and this
+   paragraph continues across a page
+
+Fielding, et al.            Standards Track                    [Page 74]
+
+RFC 2616                        HTTP/1.1                       June 1999
+
+
+   break and finishes here.
+
+2.1.1 Cache Correctness
+
+   A cache is correct if it responds with the most recent response.
+
+3 Security Considerations
+
+   This section informs implementors of security limitations.
+
+4 References
+
+   [1] Alvestrand, H., "Tags for the Identification of Languages".
+
+5 Authors' Addresses
+
+   Roy T. Fielding
+
+6 Appendices
+
+6.1 Internet Media Type message/http
+
+   This appendix describes a media type.
+
+Fielding, et al.            Standards Track                   [Page 170]
