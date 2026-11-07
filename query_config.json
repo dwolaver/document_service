@@ -1,0 +1,11 @@
+{
+  "index_path": "data/index.db",
+  "retrieval": { "limit": 5 },
+  "llm": {
+    "model": "llama3.2",
+    "base_url": "http://localhost:11434",
+    "num_ctx": 8192,
+    "max_answer_tokens": 512,
+    "timeout_seconds": 120
+  }
+}
