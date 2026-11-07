@@ -48,6 +48,33 @@ Changes reach `main` through pull requests. GitHub Actions runs the tests on eac
 and on each push to `main`, without network access to external document sources, and a pull
 request can't merge until they pass.
 
+## Building the index
+
+Ingestion downloads any missing RFCs into `data/`, then builds the search index at `data/index.db`.
+The first run needs network access to rfc-editor.org. `data/` is generated, so it isn't committed.
+
+```
+python ingest.py
+```
+
+To search the index from the command line:
+
+```
+python keyword_index.py "three-way handshake"
+python keyword_index.py "Content-Length" --limit 3
+```
+
+[`corpus.json`](corpus.json) lists the RFCs, with their family and title.
+[`ingest_config.json`](ingest_config.json) sets the chunk size limit:
+
+- `embedding_model` is the embedding model and its token limit, which is the hard ceiling.
+- `target_chunk_tokens` is the chunk size to aim for inside that ceiling.
+- `chars_per_token` is measured for this corpus with this model's tokenizer, so measure it again
+  if either one changes.
+
+The maximum chunk size in characters is `target_chunk_tokens` x `chars_per_token`. The index
+records the configuration that built it.
+
 ## Roadmap
 
 The RFC downloader, the top-level query interface and basic CI are complete. A valid query currently
@@ -73,5 +100,4 @@ evaluation stays last because it is open-ended.
 ### Open questions
 
 - How the LLM runs in the cloud: a GPU node, a small CPU model, or a hosted API.
-- The exact list of RFCs in the corpus.
 - Chunk size, given the 2,048-token limit of the embedding model.
