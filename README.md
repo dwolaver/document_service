@@ -50,11 +50,11 @@ request can't merge until they pass.
 
 ## Roadmap
 
-The RFC downloader and the top-level query interface are complete. A valid query currently
+The RFC downloader, the top-level query interface and basic CI are complete. A valid query currently
 returns `NOT_IMPLEMENTED` until the steps below are built.
 
 ```
- [0] Basic CI
+ [0] Basic CI (complete)
   |
  [1] Walking skeleton: parse + chunk + keyword search + LLM + citations
   |
