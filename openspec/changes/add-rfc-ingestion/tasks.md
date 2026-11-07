@@ -42,6 +42,8 @@
 
 ## Workflow follow-up
 
-- Open a pull request from `add-rfc-ingestion` and confirm the `test` check passes, which also confirms FTS5 works in CI. The repository owner reviews and merges it.
-- Archive the change through a follow-up branch and pull request.
+- Open a pull request from `add-rfc-ingestion` and confirm the `test` check passes, which also confirms FTS5 works in CI.
+- The repository owner reviews the code. Any changes are made on this branch, in the active change, and the `test` check must pass again.
+- After review is complete, archive the change on this branch as the last step. The change is then considered complete.
+- The repository owner squash merges the pull request once the `test` check still passes after the archive, so that the code, spec and archive land as one commit on `main`.
 - Propose `add-answer-generation`, which is the next part of step 1.
