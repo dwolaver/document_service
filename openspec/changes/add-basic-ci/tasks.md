@@ -13,7 +13,7 @@
 
 - [x] 3.1 Commit to the `add-basic-ci` branch and open a pull request against `main`; verify the `test` check runs automatically and passes, with 23 passed and 1 skipped in its log
 - [x] 3.2 Add `test` to the required status checks in the `main` ruleset (manual repository setting); verify `gh api repos/dwolaver/document_service/rules/branches/main` lists the `test` check
-- [ ] 3.3 Push a temporary failing test to the pull request; verify the `test` check fails, GitHub reports the pull request as not mergeable, and then revert the commit and confirm the check passes again
+- [x] 3.3 Push a temporary failing test to the pull request; verify the `test` check fails, GitHub reports the pull request as not mergeable, and then revert the commit and confirm the check passes again
 - [ ] 3.4 Squash merge the pull request; verify the `test` check runs on the resulting commit on `main` and passes
 
 ## Workflow follow-up
