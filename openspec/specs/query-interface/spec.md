@@ -3,8 +3,8 @@
 ## Purpose
 
 Provides the service's main entry point for submitting a natural-language query about RFCs
-and receiving a structured response, so the project can be exercised and unit-tested while
-the answer-producing RAG workflow is built incrementally.
+and receiving a structured response, with an answer drawn from the indexed RFCs and its
+citations, or a clear failure.
 
 ## Requirements
 
