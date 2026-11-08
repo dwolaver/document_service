@@ -24,16 +24,16 @@ If no release was given in the arguments, stop, change no files, and reply only 
 ## 2. Choose the mode
 
 Run `git rev-parse --short HEAD` to get the current commit. Then read `ARCHITECTURE.md` if it exists.
-Its header line, directly under the title, reads:
+Its last line, after a horizontal rule, is the generation line:
 
 `Generated from commit <commit> by <model ID>, for release <release>.`
 
 - **Create:** the file doesn't exist. Write it from the source code.
-- **Update:** the file exists and its header names `claude-opus-5-5`. Run
+- **Update:** the file exists and its generation line names `claude-opus-5-5`. Run
   `git diff --stat <recorded commit>..HEAD` and `git log --oneline <recorded commit>..HEAD` to find
   what changed, and revise the sections those changes affect.
-- **Model switch:** the file exists and its header names a different model, or has no readable
-  header. Regenerate every section except Key decisions from the source code, ignoring the old text.
+- **Model switch:** the file exists and its generation line names a different model, or it has no
+  readable generation line. Regenerate every section except Key decisions from the source code, ignoring the old text.
   At the end, list what changed in meaning compared with the previous file, so the owner can review
   it in detail.
 
@@ -60,14 +60,18 @@ the code, not the tests.
 ```
 # Architecture
 
-Generated from commit <commit> by claude-opus-5-5, for release <release>.
-
 ## Overview
 ## Workflows
 ## Public interfaces
 ## Internal interfaces
 ## Key decisions
+
+---
+
+Generated from commit <commit> by claude-opus-5-5, for release <release>.
 ```
+
+The generation line goes last because it's for maintainers, and readers don't need it.
 
 - **Overview:** what the system does and its main parts, in a few paragraphs, with a Mermaid diagram
   of the components and how data moves between them.
@@ -120,8 +124,8 @@ Fix anything that doesn't match, in any section.
 
 ## 7. Write and report
 
-Write the result to `ARCHITECTURE.md` at the repository root, with the header updated to the current
-commit and the release from the arguments. Don't create or change any other file.
+Write the result to `ARCHITECTURE.md` at the repository root, with the generation line updated to the
+current commit and the release from the arguments. Don't create or change any other file.
 
 Then reply with a short report:
 

@@ -26,7 +26,7 @@ supply the reasons for key decisions, but not facts about the current code.
 ### Requirement: Update the file from the recorded commit
 
 When `ARCHITECTURE.md` exists and was produced by the pinned model, the generator SHALL use the
-changes since the commit recorded in its header to find the sections to revise. It SHALL then check
+changes since the commit recorded in its generation line to find the sections to revise. It SHALL then check
 every file, function, parameter and diagram step the file names against the current code, and
 correct any that are wrong, including in sections the changes didn't touch.
 
@@ -42,13 +42,14 @@ correct any that are wrong, including in sections the changes didn't touch.
 
 ### Requirement: Record what produced the file
 
-Directly under its title, the file SHALL have a line giving the commit it was generated from, the
-full ID of the model that generated it, and the release it was generated for.
+The file SHALL end with a generation line, after a horizontal rule, giving the commit it was
+generated from, the full ID of the model that generated it, and the release it was generated for.
+Nothing SHALL follow it.
 
-#### Scenario: Header after a run
+#### Scenario: Generation line after a run
 
 - **WHEN** the generator runs at commit `3b64fbc` with `claude-opus-5-5` for v0.1.0
-- **THEN** the header reads `Generated from commit 3b64fbc by claude-opus-5-5, for release v0.1.0.`
+- **THEN** the file's last line reads `Generated from commit 3b64fbc by claude-opus-5-5, for release v0.1.0.`
 
 ### Requirement: Organize the file from overview to detail
 
@@ -169,13 +170,13 @@ any other file, the script SHALL reject the result and list those files, without
 
 ### Requirement: Validate a model switch more thoroughly
 
-When the model recorded in the file's header differs from the pinned model, the generator SHALL
+When the model recorded in the file's generation line differs from the pinned model, the generator SHALL
 regenerate every section except the key decisions, rather than following the changes, and SHALL list
 what changed in meaning for the owner to review.
 
 #### Scenario: Pinned model changed
 
-- **WHEN** the header names a different model from the one the skill pins
+- **WHEN** the generation line names a different model from the one the skill pins
 - **THEN** the file is regenerated apart from key decisions, and the run lists the changes in meaning
 
 ### Requirement: Explain why the script exists

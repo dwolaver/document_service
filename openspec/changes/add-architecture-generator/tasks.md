@@ -3,7 +3,7 @@
 ## 1. Skill
 
 - [x] 1.1 Add `.claude/skills/update-architecture/SKILL.md`, pinning `claude-opus-5-5` in its `model` field, with a first step that stops if it isn't running as that model; verify the frontmatter parses and names a full model ID
-- [x] 1.2 Write the skill's instructions for creating, updating and model-switch regeneration, the header line, the section order, the interface tiers, Mermaid diagrams, describing only what exists, verifying every named item against the code, and the key decisions rules; verify each requirement in the architecture-docs spec is covered by an instruction
+- [x] 1.2 Write the skill's instructions for creating, updating and model-switch regeneration, the generation line, the section order, the interface tiers, Mermaid diagrams, describing only what exists, verifying every named item against the code, and the key decisions rules; verify each requirement in the architecture-docs spec is covered by an instruction
 
 ## 2. Enforcement script
 
@@ -13,7 +13,7 @@
 
 ## 3. First generation
 
-- [x] 3.1 Run `python scripts/update_architecture.py v0.1.0` to create `ARCHITECTURE.md`; verify the run is accepted, the header matches the spec, the sections are in order with Mermaid diagrams, and key decisions are marked `New`
+- [x] 3.1 Run `python scripts/update_architecture.py v0.1.0` to create `ARCHITECTURE.md`; verify the run is accepted, the generation line matches the spec, the sections are in order with Mermaid diagrams, and key decisions are marked `New`
 - [x] 3.2 Check every file, function, class and command named in `ARCHITECTURE.md` against the code, and that no underscore names or planned features appear; verify by a script that lists names not found in the code, with each one fixed or explained
 - [x] 3.3 Run the script again with no code changes; verify the run is accepted, the key decisions are unchanged, and any other differences are explained
 - [x] 3.4 Point `SKILL.md` at a model that isn't available, and run the script; verify it exits non-zero, reports the error, and leaves `ARCHITECTURE.md` as committed, then restore `SKILL.md`

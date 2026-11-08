@@ -68,7 +68,7 @@ model rules out requiring exactly one entry in `modelUsage`.
   every run. Following only the diff would let one early mistake survive indefinitely. Deleting the
   file gives a clean rebuild.
 
-- **The header records what produced the file**:
+- **The last line records what produced the file**:
 
   ```
   Generated from commit 3b64fbc by claude-opus-5-5, for release v0.1.0.
@@ -77,6 +77,10 @@ model rules out requiring exactly one entry in `modelUsage`.
   The commit is the starting point for the next update. `git log -- ARCHITECTURE.md` was rejected,
   because a small manual fix would move that starting point and skip real changes. Tags were rejected
   because none exist yet.
+
+  The line sits at the end of the file, after a horizontal rule. It's for maintainers and the
+  generator, so it shouldn't be the first thing a casual reader sees. It was first placed under the
+  title, and moved during review.
 
 - **File structure runs from high level to detail**: High-level architecture, then workflows with
   diagrams, then public interfaces, then internal interfaces, then key decisions.
@@ -157,7 +161,7 @@ model rules out requiring exactly one entry in `modelUsage`.
   them, so nothing is deleted on the owner's behalf.
 
 - **The release is passed to the skill**: `python scripts/update_architecture.py v0.1.0` runs
-  `/update-architecture v0.1.0`, and the version goes in the header.
+  `/update-architecture v0.1.0`, and the version goes in the generation line.
 
 - **New key decisions start unreviewed**: A decision the generator adds has status `New` and no
   `Last reviewed` value. The owner sets `Current` and the release when reviewing the pull request.
@@ -168,7 +172,7 @@ model rules out requiring exactly one entry in `modelUsage`.
   pinned one. This catches most mismatches early, but it's self-reporting, so it doesn't replace the
   script.
 
-- **A model switch takes a stricter path**: If the model in the file's header differs from the pinned
+- **A model switch takes a stricter path**: If the model in the file's generation line differs from the pinned
   one, the skill ignores the diff, regenerates everything except key decisions, and lists what changed
   in meaning. The owner then validates the file in more detail than a normal update.
 

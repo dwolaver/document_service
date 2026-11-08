@@ -1,7 +1,5 @@
 # Architecture
 
-Generated from commit d0517bb by claude-opus-5-5, for release v0.1.0.
-
 ## Overview
 
 The Document Q&A Service answers natural-language questions about a curated set of IETF RFCs, and
@@ -450,3 +448,7 @@ Besides the public API above:
 | `QueryErrorCode` values are renumbered until the first release, and retired after it | No outside caller depended on old values before a release, and consecutive values are simpler | No release has happened. v0.1.0 is the first release, so from it on a removed value must be retired | New | - | [add-answer-generation design](openspec/changes/archive/2026-11-07-add-answer-generation/design.md) |
 | Ollama loads the model on demand, and a load of at least 500 ms marks a cold start | A preliminary check would add a call to every query, and the request already reports its load time | Measured loads stay far from 500 ms: about 2 ms warm and 4,852 ms cold. `keep_alive` stays at Ollama's default | New | - | [add-answer-generation design](openspec/changes/archive/2026-11-07-add-answer-generation/design.md) |
 | `scripts/update_architecture.py` enforces the pinned model by checking `modelUsage` after a headless run | A skill's `model` field fails open when a policy blocks the model, and a fallback model can take over | Claude Code skills still can't refuse to run on a model mismatch. A helper model may still appear in `modelUsage`, but with less output | New | - | [add-architecture-generator design](openspec/changes/add-architecture-generator/design.md) |
+
+---
+
+Generated from commit d0517bb by claude-opus-5-5, for release v0.1.0.
