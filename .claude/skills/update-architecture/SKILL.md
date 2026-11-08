@@ -29,8 +29,8 @@ Its last line, after a horizontal rule, is the generation line:
 `Generated from commit <commit> by <model ID>, for release <release>.`
 
 - **Create:** the file doesn't exist. Write it from the source code.
-- **Update:** the file exists and its generation line names `claude-opus-5-5`. Choose the starting
-  point, then revise the sections the changes since it affect.
+- **Update:** the file exists and its generation line names `claude-opus-5-5`. First choose a
+  starting point, the commit that the changes are measured from:
 
   1. Run `git rev-parse --verify --quiet '<recorded release>^{commit}'`. If it prints a commit, the
      release tag is the starting point, even if the recorded commit also exists.
@@ -42,7 +42,8 @@ Its last line, after a horizontal rule, is the generation line:
      against the code in step 6, and keep the key decisions under the rules in step 5.
 
   With a starting point, run `git diff --stat <starting point>..HEAD` and
-  `git log --oneline <starting point>..HEAD` to find what changed.
+  `git log --oneline <starting point>..HEAD` to find what changed, and revise the sections those
+  changes affect.
 - **Model switch:** the file exists and its generation line names a different model, or it has no
   readable generation line. Regenerate every section except Key decisions from the source code, ignoring the old text.
   At the end, list what changed in meaning compared with the previous file, so the owner can review
