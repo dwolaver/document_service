@@ -20,6 +20,8 @@ contains the reviewed file. The original design rejected tags only because none 
   keeps the key decisions, and says so in its report.
 - The report names the starting point it used.
 - The generation line keeps its format, so the current `ARCHITECTURE.md` stays valid.
+- The requirement "Update the file from the recorded commit" is renamed "Update the file from a
+  starting point", since the recorded commit is now only a fallback.
 
 Out of scope: changing the enforcement script, which already allows the git commands this needs, and
 regenerating `ARCHITECTURE.md`, which waits for the next release.

@@ -1,13 +1,17 @@
 # Spec Delta
 
+## RENAMED Requirements
+
+- FROM: `### Requirement: Update the file from the recorded commit`
+- TO: `### Requirement: Update the file from a starting point`
+
 ## MODIFIED Requirements
 
-### Requirement: Update the file from the recorded commit
+### Requirement: Update the file from a starting point
 
 When `ARCHITECTURE.md` exists and was produced by the pinned model, the generator SHALL use the
-changes since a starting point to find the sections to revise. The starting point SHALL be the tag of
-the release named in the generation line when that tag exists, otherwise the commit recorded in the
-generation line when that commit is available. It SHALL then check every file, function, parameter
+changes since a starting point to find the sections to revise: the tag of the release in the
+generation line, otherwise the commit it records. It SHALL then check every file, function, parameter
 and diagram step the file names against the current code, and correct any that are wrong, including
 in sections the changes didn't touch.
 
