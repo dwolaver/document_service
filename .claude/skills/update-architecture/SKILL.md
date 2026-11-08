@@ -29,9 +29,21 @@ Its last line, after a horizontal rule, is the generation line:
 `Generated from commit <commit> by <model ID>, for release <release>.`
 
 - **Create:** the file doesn't exist. Write it from the source code.
-- **Update:** the file exists and its generation line names `claude-opus-5-5`. Run
-  `git diff --stat <recorded commit>..HEAD` and `git log --oneline <recorded commit>..HEAD` to find
-  what changed, and revise the sections those changes affect.
+- **Update:** the file exists and its generation line names `claude-opus-5-5`. First choose a
+  starting point, the commit that the changes are measured from:
+
+  1. Run `git rev-parse --verify --quiet '<recorded release>^{commit}'`. If it prints a commit, the
+     release tag is the starting point, even if the recorded commit also exists.
+  2. Otherwise, run `git rev-parse --verify --quiet '<recorded commit>^{commit}'`. If it prints a
+     commit, the recorded commit is the starting point.
+  3. Otherwise, there's no starting point. This happens when the release was never tagged and the
+     recorded commit was lost, for example after a squash merge and branch deletion. Don't treat it
+     as an error or as a model switch: keep the existing text as the base, check every section
+     against the code in step 6, and keep the key decisions under the rules in step 5.
+
+  With a starting point, run `git diff --stat <starting point>..HEAD` and
+  `git log --oneline <starting point>..HEAD` to find what changed, and revise the sections those
+  changes affect.
 - **Model switch:** the file exists and its generation line names a different model, or it has no
   readable generation line. Regenerate every section except Key decisions from the source code, ignoring the old text.
   At the end, list what changed in meaning compared with the previous file, so the owner can review
@@ -110,7 +122,7 @@ These rules protect the owner's review, so follow them exactly:
 - **You may add a row** for a decision that isn't in the table yet. Its Status is `New` and its Last
   reviewed is `-`.
 - **You may set a row to `Review needed`** when the code no longer reflects the decision, or when the
-  changes since the recorded commit touched its assumption. Add the reason in the Status cell, for
+  changes since the starting point touched its assumption. Add the reason in the Status cell, for
   example `Review needed: index now stores vectors`.
 - **Never set a row to `Current`, and never change Last reviewed.** Only the owner does that.
 - **Don't mark a row `Superseded`.** That happens through an OpenSpec change, which the owner records.
@@ -130,6 +142,8 @@ current commit and the release from the arguments. Don't create or change any ot
 Then reply with a short report:
 
 - The mode you used.
+- In update mode, the starting point: the release tag or the recorded commit, by name, or that no
+  starting point was found, so every section was checked against the code without a diff.
 - The sections you changed, and why.
 - Key decisions you added or set to `Review needed`, with reasons.
 - Questions for the owner: every assumption in Key decisions that can't be checked from the code,
