@@ -162,7 +162,7 @@ flowchart LR
     B --> C{"Result"}
     C -- "None" --> D["Exit 1"]
     C -- "empty" --> E["Print No matches., exit 0"]
-    C -- "matches" --> F["Print chunk ID, RFC, section and a 160-character excerpt, exit 0"]
+    C -- "matches" --> F["Print chunk ID, RFC, section number and title, and a 160-character excerpt, exit 0"]
 ```
 
 `search` opens the index read-only and reports a missing file instead of creating one. It splits
@@ -274,7 +274,7 @@ this question."
 |---|---|---|
 | `python ingest.py` | `--corpus` (default `corpus.json`), `--config` (default `ingest_config.json`), `--data-dir` (default `data/`), all relative to the repository root | Prints RFC count, chunk count and largest chunk; exits 0, or 1 with a message on stderr |
 | `python query.py QUERY` | `query`: the question | Prints the answer, `Sources:` and any cold-start note; exits 0, including not found, or 1 with the error on stderr |
-| `python keyword_index.py QUERY` | `query`: the search text; `--index` (default `data/index.db`); `--limit` (default 5) | Prints each match's chunk ID, RFC, section and an excerpt, or `No matches.`; exits 1 only if the index can't be read |
+| `python keyword_index.py QUERY` | `query`: the search text; `--index` (default `data/index.db`); `--limit` (default 5) | Prints each match's chunk ID, RFC, section number and title, and an excerpt, or `No matches.`; exits 1 only if the index can't be read |
 | `python scripts/update_architecture.py RELEASE` | `release`: one word, such as `v0.1.0` | Prints the run's report and models used; exits 0 when kept, or 1 when refused or rejected |
 
 ### Configuration and data files
@@ -344,7 +344,8 @@ Considerations` sections use the section numbers `abstract` and `security`.
   removes page headers, `[Page n]` footers and the blank lines around each break.
 - `parse_rfc(text) -> list[Section]`: returns the retained sections in document order. Front matter,
   the table of contents, and back matter such as references, acknowledgments, author addresses and
-  the index are dropped, including the subsections of a dropped numbered section.
+  the index are dropped, including the subsections of a dropped numbered section. Of the
+  unnumbered sections, only `Abstract` and `Security Considerations` are kept.
 
 ### `chunker.py`
 
@@ -398,7 +399,8 @@ All SQL in the project is in this module.
   `answer_tokens`, each `Optional[int]`. When `found` is false, `answer` is `None` and `cited` is
   empty.
 - `ModelUnavailableError` and `ModelResponseError`: exceptions whose messages are shown to the user.
-  The first includes a setup hint, such as `ollama serve` or `ollama pull <model>`.
+  When Ollama can't be reached or lacks the model, the first includes a setup hint, `ollama serve`
+  or `ollama pull <model>`.
 - `build_messages(question, chunks) -> list[dict]`: the system and user chat messages.
 - `generate_answer(question, chunks, settings) -> GenerationResult`: one model call, with checked
   citations. Raises either exception above when no usable answer comes back.
@@ -451,4 +453,4 @@ Besides the public API above:
 
 ---
 
-Generated from commit d0517bb by claude-opus-5-5, for release v0.1.0.
+Generated from commit 72f98af by claude-opus-5-5, for release v0.1.0.
