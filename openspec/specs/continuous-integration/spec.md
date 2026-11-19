@@ -29,9 +29,10 @@ including each new push to that pull request, and on every push to `main`.
 
 ### Requirement: Verify the test suite from a clean environment
 
-The automated checks SHALL install only the project's declared dependencies into a clean
+The automated checks SHALL install the project and only its declared dependencies into a clean
 environment on the project's supported Python version, then run the test suite. The checks
-SHALL fail when any test fails or when the tests cannot be collected or run.
+SHALL fail when the project can't be installed, when any test fails or when the tests cannot be
+collected or run.
 
 #### Scenario: All tests pass
 
@@ -46,6 +47,11 @@ SHALL fail when any test fails or when the tests cannot be collected or run.
 #### Scenario: Undeclared dependency
 
 - **WHEN** the test suite needs a package that the project does not declare
+- **THEN** the automated checks report failure
+
+#### Scenario: Project can't be installed
+
+- **WHEN** the project's package definition is invalid or names a command whose target doesn't exist
 - **THEN** the automated checks report failure
 
 ### Requirement: Keep checks independent of external services
