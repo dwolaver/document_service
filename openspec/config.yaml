@@ -23,15 +23,17 @@ githubCopilot:
 rules:
   tasks:
     - >-
-      In the Workflow follow-up section, use this normal flow: after apply, the repository owner
-      reviews the code and CI runs on the pull request; any changes are made before archive, in
-      the active change; archive on the same branch as the last step, which makes the change
-      complete; the repository owner then merges as long as CI still passes, so that the code,
-      spec and archive land as one commit on main.
+      In the Workflow follow-up section, use this normal flow: after apply, the
+      repository owner reviews the code and CI runs on the pull request; any
+      changes are made before archive, in the active change; archive on the same
+      branch as the last step, which makes the change complete; the repository
+      owner then merges as long as CI still passes, so that the code, spec and
+      archive land as one commit on main.
     - >-
-      Depart from that flow only when a change has work that can only happen after merge. State
-      the reason in the Workflow follow-up section, and add the merge-before-archive label to its
-      pull request.
+      Depart from that flow only when a change has work that can only happen
+      after merge. State the reason in the Workflow follow-up section, and add
+      the merge-before-archive label to its pull request.
+skillsScope: project
 
 # Per-operation guidance (optional)
 # Add advisory guidance for how apply and archive work should be conducted.
