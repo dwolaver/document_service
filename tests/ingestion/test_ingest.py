@@ -5,10 +5,10 @@ import pytest
 
 from rfc_qa.ingestion import ingest
 from rfc_qa.ingestion.ingest import IngestError, load_config, load_corpus, main, run_ingestion
+from rfc_qa.paths import REPO_ROOT
 from rfc_qa.retrieval.keyword_index import read_metadata, search
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 ENTRIES = [
     {"number": 793, "family": "tcp", "title": "Transmission Control Protocol"},
@@ -92,7 +92,7 @@ def test_missing_manifest_is_rejected(tmp_path):
 
 
 def test_real_corpus_loads_and_has_the_obsolete_pairs():
-    entries = load_corpus(os.path.join(ROOT, "corpus.json"))
+    entries = load_corpus(os.path.join(REPO_ROOT, "corpus.json"))
     numbers = {entry.number for entry in entries}
     assert len(entries) == 59
     assert {793, 9293, 2616, 9110, 8446, 9846} <= numbers
@@ -156,7 +156,7 @@ def test_missing_config_value_is_rejected(tmp_path, key):
 
 
 def test_real_config_loads():
-    config = load_config(os.path.join(ROOT, "ingest_config.json"))
+    config = load_config(os.path.join(REPO_ROOT, "ingest_config.json"))
     assert config.embedding_model_name == "nomic-embed-text"
     assert 0 < config.max_chunk_chars
 
