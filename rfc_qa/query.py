@@ -14,17 +14,17 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import List, Optional
 
-from answer_generator import (
+from rfc_qa import paths
+from rfc_qa.generation.answer_generator import (
     NOT_FOUND_ANSWER,
     ModelResponseError,
     ModelSettings,
     ModelUnavailableError,
     generate_answer,
 )
-from keyword_index import read_metadata, search
+from rfc_qa.retrieval.keyword_index import read_metadata, search
 
-_ROOT = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(_ROOT, "query_config.json")
+CONFIG_PATH = paths.QUERY_CONFIG_PATH
 
 # Tokens reserved for the instructions, passage labels and the question.
 PROMPT_ALLOWANCE_TOKENS = 512
@@ -146,7 +146,7 @@ def load_query_config(path):
     retrieval = _section(data, "retrieval")
     llm = _section(data, "llm")
     return QueryConfig(
-        index_path=os.path.join(_ROOT, index_path),
+        index_path=os.path.join(paths.REPO_ROOT, index_path),
         retrieval_limit=_positive_integer(retrieval.get("limit"), "retrieval.limit"),
         model=ModelSettings(
             model=_non_empty_string(llm.get("model"), "llm.model"),
@@ -227,7 +227,7 @@ def _answer(user_query, config):
     if chunk_tokens is None:
         return _failure(
             QueryErrorCode.INDEX_UNAVAILABLE,
-            "The index at {p!r} can't be read. Build it with `python ingest.py`.".format(p=config.index_path),
+            "The index at {p!r} can't be read. Build it with `rfc-ingest`.".format(p=config.index_path),
             clock.timings(),
         )
     budget_error = _budget_error(config, chunk_tokens)

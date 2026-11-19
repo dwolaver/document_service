@@ -2,22 +2,10 @@
 
 import re
 from collections import Counter
-from dataclasses import dataclass
+
+from rfc_qa.chunk import Chunk
 
 _PARAGRAPH_BREAK = re.compile(r"\n[ \t]*\n+")
-
-
-@dataclass(frozen=True)
-class Chunk:
-    """A citable passage. ``text`` keeps the line layout of the source."""
-
-    chunk_id: str
-    rfc_number: int
-    rfc_title: str
-    family: str
-    section_number: str
-    section_title: str
-    text: str
 
 
 def _pack(pieces, separator, max_chars):

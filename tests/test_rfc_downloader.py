@@ -2,8 +2,8 @@ import os
 
 import pytest
 
-import rfc_downloader
-from rfc_downloader import download_rfc
+from rfc_qa.ingestion import rfc_downloader
+from rfc_qa.ingestion.rfc_downloader import download_rfc
 
 
 class FakeResponse:

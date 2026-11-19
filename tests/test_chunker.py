@@ -1,5 +1,5 @@
-from chunker import chunk_sections, split_text
-from rfc_parser import Section
+from rfc_qa.ingestion.chunker import chunk_sections, split_text
+from rfc_qa.ingestion.rfc_parser import Section
 
 
 def _chunks(sections, max_chars=100):

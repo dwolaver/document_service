@@ -3,8 +3,9 @@ import json
 import pytest
 import requests
 
-import answer_generator
-from answer_generator import (
+from rfc_qa.chunk import Chunk
+from rfc_qa.generation import answer_generator
+from rfc_qa.generation.answer_generator import (
     NOT_FOUND_ANSWER,
     ModelResponseError,
     ModelSettings,
@@ -12,7 +13,6 @@ from answer_generator import (
     build_messages,
     generate_answer,
 )
-from chunker import Chunk
 
 SETTINGS = ModelSettings("llama3.2", "http://localhost:11434", 8192, 512, 120)
 CHUNKS = [

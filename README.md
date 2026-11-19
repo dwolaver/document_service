@@ -55,8 +55,8 @@ These decisions were mine, and they shaped the result:
   corpus deliberately includes obsolete RFCs alongside the ones that replaced them.
 - **Building it by hand.** I chose to write the pipeline without a RAG framework, and to run
   open-weight models locally with Ollama, so that each part can be seen and understood.
-- **Two entry points.** The split of the system into an offline ingestion step, `ingest.py`, and a
-  query step, `query.py`, came out of my planning discussions with the agents. Separating them means
+- **Two entry points.** The split of the system into an offline ingestion step, `rfc-ingest`, and a
+  query step, `rfc-query`, came out of my planning discussions with the agents. Separating them means
   the slow work of downloading, parsing and indexing RFCs happens once, and each question works from
   the finished index.
 - **Challenging the database choice.** During planning I asked for SQLite to be weighed against
@@ -101,7 +101,8 @@ show each decision with its reasons and the alternatives that were rejected, and
 
 ## Development
 
-The project uses Python 3.14. To install the dependencies and run the tests:
+The project uses Python 3.14. To install the dependencies and the project's commands, and run the
+tests:
 
 ```
 python3.14 -m venv venv
@@ -110,7 +111,14 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-Use `python -m pytest` rather than bare `pytest`, because the modules sit at the repository root.
+`requirements-dev.txt` installs the project in editable mode, which provides the `rfc-ingest`,
+`rfc-query` and `rfc-search` commands. After pulling a change to `pyproject.toml`, run the `pip
+install` line again. The code lives in the `rfc_qa` package, with a subpackage each for ingestion,
+retrieval and generation. Configuration and `data/` stay at the repository root, and the commands
+find them there from any directory.
+
+Use `python -m pytest` rather than bare `pytest`, because the tests for the release script import it
+from `scripts/` at the repository root.
 The network integration test is skipped unless `RFC_DOWNLOADER_NETWORK_TESTS=1` is set.
 
 Changes reach `main` through pull requests. GitHub Actions runs the tests on each pull request
@@ -129,14 +137,14 @@ Ingestion downloads any missing RFCs into `data/`, then builds the search index 
 The first run needs network access to rfc-editor.org. `data/` is generated, so it isn't committed.
 
 ```
-python ingest.py
+rfc-ingest
 ```
 
 To search the index from the command line:
 
 ```
-python keyword_index.py "three-way handshake"
-python keyword_index.py "Content-Length" --limit 3
+rfc-search "three-way handshake"
+rfc-search "Content-Length" --limit 3
 ```
 
 [`corpus.json`](corpus.json) lists the RFCs, with their family and title.
@@ -153,11 +161,11 @@ records the configuration that built it.
 ## Asking a question
 
 Answering needs [Ollama](https://ollama.com) running locally with the `llama3.2` model, and an index
-built by `ingest.py`:
+built by `rfc-ingest`:
 
 ```
 ollama pull llama3.2
-python query.py "What does a 404 status code mean?"
+rfc-query "What does a 404 status code mean?"
 ```
 
 The answer is printed with its sources:
@@ -173,7 +181,7 @@ Sources:
 
 When the indexed RFCs don't answer a question, it says so and exits normally. Ollama loads the model
 on the first question after it has been idle, which takes a few seconds, and the output notes when
-that happened. From Python, `query.query()` returns the same result, with timings and a
+that happened. From Python, `rfc_qa.query.query()` returns the same result, with timings and a
 `cold_start` flag, so that slow first answers can be left out of performance figures.
 
 [`query_config.json`](query_config.json) sets the model, the Ollama address, the context window,

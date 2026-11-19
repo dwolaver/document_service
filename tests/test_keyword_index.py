@@ -2,9 +2,9 @@ import os
 
 import pytest
 
-import keyword_index
-from chunker import Chunk
-from keyword_index import build_index, main, read_metadata, search
+from rfc_qa.chunk import Chunk
+from rfc_qa.retrieval import keyword_index
+from rfc_qa.retrieval.keyword_index import build_index, main, read_metadata, search
 
 METADATA = {"embedding_model_name": "nomic-embed-text", "max_chunk_chars": 2970}
 
@@ -134,7 +134,9 @@ def test_missing_index_reports_and_does_not_create_it(tmp_path, capsys):
     path = str(tmp_path / "missing.db")
     assert search(path, "handshake") is None
     assert not os.path.exists(path)
-    assert "Index not found" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "Index not found" in err
+    assert "rfc-ingest" in err
 
 
 def test_corrupt_index_reports_a_diagnostic(tmp_path, capsys):
