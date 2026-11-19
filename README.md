@@ -108,7 +108,7 @@ tests:
 python3.14 -m venv venv
 source venv/bin/activate
 pip install -r requirements-dev.txt
-python -m pytest
+pytest
 ```
 
 `requirements-dev.txt` installs the project in editable mode, which provides the `rfc-ingest`,
@@ -117,8 +117,6 @@ install` line again. The code lives in the `rfc_qa` package, with a subpackage e
 retrieval and generation. Configuration and `data/` stay at the repository root, and the commands
 find them there from any directory.
 
-Use `python -m pytest` rather than bare `pytest`, because the tests for the release script import it
-from `scripts/` at the repository root.
 The network integration test is skipped unless `RFC_DOWNLOADER_NETWORK_TESTS=1` is set.
 
 Changes reach `main` through pull requests. GitHub Actions runs the tests on each pull request
