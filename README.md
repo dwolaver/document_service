@@ -233,6 +233,6 @@ evaluation stays last because it is open-ended.
 
 ## License
 
-The code is released under the [MIT License](LICENSE). The test fixtures in `tests/fixtures/` contain
-excerpts of RFCs, which remain under the IETF Trust's terms in [BCP 78](https://www.rfc-editor.org/info/bcp78).
-RFCs downloaded by ingestion aren't committed.
+The code is released under the [MIT License](LICENSE). The test fixtures in
+`tests/ingestion/fixtures/` contain excerpts of RFCs, which remain under the IETF Trust's terms in
+[BCP 78](https://www.rfc-editor.org/info/bcp78). RFCs downloaded by ingestion aren't committed.
