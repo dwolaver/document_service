@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rfc-qa"
+version = "0.1.0"
+description = "Answer questions from the RFCs with checked citations."
+readme = "README.md"
+requires-python = ">=3.14"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = ["requests"]
+
+[project.scripts]
+rfc-ingest = "rfc_qa.ingestion.ingest:main"
+rfc-query = "rfc_qa.query:main"
+rfc-search = "rfc_qa.retrieval.keyword_index:main"
+
+[tool.setuptools.packages.find]
+include = ["rfc_qa*"]

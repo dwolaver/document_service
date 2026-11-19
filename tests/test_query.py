@@ -3,13 +3,14 @@ import os
 
 import pytest
 
-import answer_generator
-import query
-from answer_generator import ModelResponseError, ModelUnavailableError
-from chunker import Chunk
-from keyword_index import build_index
-from query import QueryErrorCode, QueryResponse, Timings, load_query_config, main
-from query import query as run_query
+from rfc_qa import query
+from rfc_qa.chunk import Chunk
+from rfc_qa.generation import answer_generator
+from rfc_qa.generation.answer_generator import ModelResponseError, ModelUnavailableError
+from rfc_qa.paths import REPO_ROOT
+from rfc_qa.query import QueryErrorCode, QueryResponse, Timings, load_query_config, main
+from rfc_qa.query import query as run_query
+from rfc_qa.retrieval.keyword_index import build_index
 
 CONFIG = {
     "index_path": "data/index.db",
@@ -86,15 +87,25 @@ def setup(tmp_path, monkeypatch, index_path):
 # --- Configuration (task 1.1) ---
 
 def test_real_config_loads():
-    config = load_query_config(os.path.join(os.path.dirname(query.__file__), "query_config.json"))
+    config = load_query_config(os.path.join(REPO_ROOT, "query_config.json"))
     assert config.model.model == "llama3.2"
     assert config.retrieval_limit == 5
-    assert config.index_path == os.path.join(os.path.dirname(query.__file__), "data", "index.db")
+    assert config.index_path == os.path.join(REPO_ROOT, "data", "index.db")
+
+
+def test_default_config_is_at_the_repository_root():
+    assert query.CONFIG_PATH == os.path.join(REPO_ROOT, "query_config.json")
 
 
 def test_relative_index_path_resolves_from_the_repository_root(tmp_path, monkeypatch):
     config = load_query_config(_write_config(tmp_path, CONFIG, monkeypatch))
-    assert config.index_path == os.path.join(os.path.dirname(query.__file__), "data", "index.db")
+    assert config.index_path == os.path.join(REPO_ROOT, "data", "index.db")
+
+
+def test_relative_index_path_ignores_the_working_directory(tmp_path, monkeypatch):
+    config_path = _write_config(tmp_path, CONFIG, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    assert load_query_config(config_path).index_path == os.path.join(REPO_ROOT, "data", "index.db")
 
 
 def test_absolute_index_path_is_kept(tmp_path, monkeypatch):
@@ -207,7 +218,7 @@ def test_missing_index(tmp_path, monkeypatch, setup):
     _write_config(tmp_path, _with(index_path=str(tmp_path / "missing.db")), monkeypatch)
     response = run_query("What does a 404 status code mean?")
     assert (response.success, response.error_code) == (False, QueryErrorCode.INDEX_UNAVAILABLE)
-    assert "ingest.py" in response.error_string
+    assert "rfc-ingest" in response.error_string
     assert setup.calls == []
 
 

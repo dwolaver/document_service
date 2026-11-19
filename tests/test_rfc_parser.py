@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from rfc_parser import parse_rfc, remove_page_furniture
+from rfc_qa.ingestion.rfc_parser import parse_rfc, remove_page_furniture
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 

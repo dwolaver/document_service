@@ -9,9 +9,10 @@ import sys
 import tempfile
 from dataclasses import dataclass
 
-from chunker import Chunk
+from rfc_qa import paths
+from rfc_qa.chunk import Chunk
 
-DEFAULT_INDEX_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "index.db")
+DEFAULT_INDEX_PATH = paths.INDEX_PATH
 DEFAULT_LIMIT = 5
 
 # BM25 weight of a match in each FTS column, so section titles count more than body text.
@@ -113,7 +114,7 @@ def build_index(chunks, metadata, path):
 def _connect_read_only(path):
     """Open an existing index. SQLite would otherwise create an empty file at a missing path."""
     if not os.path.isfile(path):
-        _log_error("Index not found: {p!r}. Run ingest.py to build it.".format(p=path))
+        _log_error("Index not found: {p!r}. Run rfc-ingest to build it.".format(p=path))
         return None
     uri = pathlib.Path(path).resolve().as_uri() + "?mode=ro"
     return sqlite3.connect(uri, uri=True)

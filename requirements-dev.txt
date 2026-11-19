@@ -1,2 +1,3 @@
 -r requirements.txt
+-e .
 pytest==9.2.0

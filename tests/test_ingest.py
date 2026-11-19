@@ -3,9 +3,9 @@ import os
 
 import pytest
 
-import ingest
-from ingest import IngestError, load_config, load_corpus, main, run_ingestion
-from keyword_index import read_metadata, search
+from rfc_qa.ingestion import ingest
+from rfc_qa.ingestion.ingest import IngestError, load_config, load_corpus, main, run_ingestion
+from rfc_qa.retrieval.keyword_index import read_metadata, search
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

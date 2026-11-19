@@ -11,15 +11,15 @@ import os
 import sys
 from dataclasses import dataclass
 
-from chunker import chunk_sections
-from keyword_index import build_index
-from rfc_downloader import download_rfc
-from rfc_parser import parse_rfc
+from rfc_qa import paths
+from rfc_qa.ingestion.chunker import chunk_sections
+from rfc_qa.ingestion.rfc_downloader import download_rfc
+from rfc_qa.ingestion.rfc_parser import parse_rfc
+from rfc_qa.retrieval.keyword_index import build_index
 
-_ROOT = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_CORPUS_PATH = os.path.join(_ROOT, "corpus.json")
-DEFAULT_CONFIG_PATH = os.path.join(_ROOT, "ingest_config.json")
-DEFAULT_DATA_DIR = os.path.join(_ROOT, "data")
+DEFAULT_CORPUS_PATH = paths.CORPUS_PATH
+DEFAULT_CONFIG_PATH = paths.INGEST_CONFIG_PATH
+DEFAULT_DATA_DIR = paths.DATA_DIR
 
 FAMILIES = ("http", "tls", "tcp")
 
