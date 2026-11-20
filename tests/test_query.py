@@ -13,7 +13,6 @@ from rfc_qa.query import query as run_query
 from rfc_qa.retrieval.keyword_index import build_index
 
 CONFIG = {
-    "index_path": "data/index.db",
     "retrieval": {"limit": 3},
     "llm": {
         "model": "llama3.2",
@@ -54,15 +53,24 @@ def _with(**changes):
 _MISSING = object()
 
 
-@pytest.fixture
-def index_path(tmp_path):
-    path = str(tmp_path / "index.db")
-    assert build_index(CHUNKS, {"target_chunk_tokens": 1100}, path)
-    return path
+def _data_dir(path, metadata=None):
+    """Build a fixture index as ``index.db`` in a new data directory at ``path``."""
+    path.mkdir()
+    metadata = {"target_chunk_tokens": 1100} if metadata is None else metadata
+    assert build_index(CHUNKS, metadata, str(path / "index.db"))
+    return str(path)
 
 
 @pytest.fixture
-def setup(tmp_path, monkeypatch, index_path):
+def data_dir(tmp_path, monkeypatch):
+    """A data directory holding the fixture index, selected through the environment variable."""
+    directory = _data_dir(tmp_path / "data")
+    monkeypatch.setenv(paths.DATA_DIR_ENV, directory)
+    return directory
+
+
+@pytest.fixture
+def setup(tmp_path, monkeypatch, data_dir):
     """A fixture index and config, with the model replaced by ``setup.result`` or ``setup.error``."""
 
     class Setup:
@@ -81,7 +89,7 @@ def setup(tmp_path, monkeypatch, index_path):
 
     Setup.calls = []
     monkeypatch.setattr(query, "generate_answer", fake_generate)
-    _write_config(tmp_path, _with(index_path=index_path), monkeypatch)
+    _write_config(tmp_path, CONFIG, monkeypatch)
     return Setup
 
 
@@ -91,7 +99,6 @@ def test_real_config_loads():
     config = load_query_config(os.path.join(paths.DEFAULT_CONFIG_DIR, "query.json"))
     assert config.model.model == "llama3.2"
     assert config.retrieval_limit == 5
-    assert config.index_path == os.path.join(REPO_ROOT, "data", "index.db")
 
 
 def _spy_on_config_path(monkeypatch):
@@ -141,40 +148,53 @@ def test_missing_config_dir_is_a_config_error(tmp_path, monkeypatch, use_env, so
     assert source in response.error_string
 
 
-def test_config_in_another_directory_resolves_a_relative_index_from_the_repository_root(
-    tmp_path, monkeypatch
-):
+@pytest.mark.parametrize("value", ["data/index.db", "/srv/rfc-qa/index.db", ""])
+def test_index_path_left_in_the_config_is_rejected(tmp_path, monkeypatch, value):
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    (elsewhere / "query.json").write_text(json.dumps(CONFIG), encoding="utf-8")
-    monkeypatch.chdir(tmp_path)
+    data = {**CONFIG, "index_path": value}
+    (elsewhere / "query.json").write_text(json.dumps(data), encoding="utf-8")
+    response = run_query("What does 404 mean?", config_dir=str(elsewhere))
+    assert (response.success, response.error_code) == (False, QueryErrorCode.CONFIG_INVALID)
+    assert "index_path" in response.error_string
+    assert "data directory" in response.error_string
+
+
+def _spy_on_index_path(monkeypatch):
+    """Record the index path a query is answered from, stopping the query there."""
     used = []
-    monkeypatch.setattr(query, "_answer", lambda user_query, config: used.append(config.index_path))
-    run_query("What does 404 mean?", config_dir=str(elsewhere))
+    monkeypatch.setattr(
+        query, "_answer", lambda user_query, config, index_path: used.append(index_path)
+    )
+    return used
+
+
+def test_default_data_directory(tmp_path, monkeypatch):
+    _write_config(tmp_path, CONFIG, monkeypatch)
+    used = _spy_on_index_path(monkeypatch)
+    run_query("What does 404 mean?")
     assert used == [os.path.join(REPO_ROOT, "data", "index.db")]
 
 
-def test_relative_index_path_resolves_from_the_repository_root(tmp_path, monkeypatch):
-    config = load_query_config(_write_config(tmp_path, CONFIG, monkeypatch))
-    assert config.index_path == os.path.join(REPO_ROOT, "data", "index.db")
+def test_data_directory_from_the_environment(tmp_path, monkeypatch):
+    _write_config(tmp_path, CONFIG, monkeypatch)
+    monkeypatch.setenv(paths.DATA_DIR_ENV, str(tmp_path / "env"))
+    used = _spy_on_index_path(monkeypatch)
+    run_query("What does 404 mean?")
+    assert used == [str(tmp_path / "env" / "index.db")]
 
 
-def test_relative_index_path_ignores_the_working_directory(tmp_path, monkeypatch):
-    config_path = _write_config(tmp_path, CONFIG, monkeypatch)
-    monkeypatch.chdir(tmp_path)
-    assert load_query_config(config_path).index_path == os.path.join(REPO_ROOT, "data", "index.db")
-
-
-def test_absolute_index_path_is_kept(tmp_path, monkeypatch):
-    path = str(tmp_path / "elsewhere.db")
-    assert load_query_config(_write_config(tmp_path, _with(index_path=path), monkeypatch)).index_path == path
+def test_data_dir_argument_over_environment(tmp_path, monkeypatch):
+    _write_config(tmp_path, CONFIG, monkeypatch)
+    monkeypatch.setenv(paths.DATA_DIR_ENV, str(tmp_path / "env"))
+    used = _spy_on_index_path(monkeypatch)
+    run_query("What does 404 mean?", data_dir=str(tmp_path / "argument"))
+    assert used == [str(tmp_path / "argument" / "index.db")]
 
 
 @pytest.mark.parametrize(
     "changes, name",
     [
-        ({"index_path": _MISSING}, "index_path"),
-        ({"index_path": ""}, "index_path"),
         ({"retrieval__limit": 0}, "retrieval.limit"),
         ({"retrieval__limit": "5"}, "retrieval.limit"),
         ({"retrieval__limit": True}, "retrieval.limit"),
@@ -299,30 +319,31 @@ def test_model_not_found_is_a_successful_not_found(setup):
 
 
 def test_missing_index(tmp_path, monkeypatch, setup):
-    _write_config(tmp_path, _with(index_path=str(tmp_path / "missing.db")), monkeypatch)
+    missing = tmp_path / "missing"
+    monkeypatch.setenv(paths.DATA_DIR_ENV, str(missing))
     response = run_query("What does a 404 status code mean?")
     assert (response.success, response.error_code) == (False, QueryErrorCode.INDEX_UNAVAILABLE)
+    assert str(missing / "index.db") in response.error_string
     assert "rfc-ingest" in response.error_string
+    assert not missing.exists()
     assert setup.calls == []
 
 
 def test_index_without_chunk_token_target(tmp_path, monkeypatch, setup):
-    path = str(tmp_path / "old.db")
-    assert build_index(CHUNKS, {}, path)
-    _write_config(tmp_path, _with(index_path=path), monkeypatch)
+    monkeypatch.setenv(paths.DATA_DIR_ENV, _data_dir(tmp_path / "old", metadata={}))
     assert run_query("What does 404 mean?").error_code is QueryErrorCode.INDEX_UNAVAILABLE
 
 
-def test_budget_that_does_not_fit_fails_before_the_model(tmp_path, monkeypatch, setup, index_path):
-    _write_config(tmp_path, _with(index_path=index_path, llm__num_ctx=4096), monkeypatch)
+def test_budget_that_does_not_fit_fails_before_the_model(tmp_path, monkeypatch, setup):
+    _write_config(tmp_path, _with(llm__num_ctx=4096), monkeypatch)
     response = run_query("What does a 404 status code mean?")
     assert (response.success, response.error_code) == (False, QueryErrorCode.CONFIG_INVALID)
     assert "4324 tokens" in response.error_string
     assert setup.calls == []
 
 
-def test_budget_that_fits_exactly(tmp_path, monkeypatch, setup, index_path):
-    _write_config(tmp_path, _with(index_path=index_path, llm__num_ctx=3 * 1100 + 512 + 512), monkeypatch)
+def test_budget_that_fits_exactly(tmp_path, monkeypatch, setup):
+    _write_config(tmp_path, _with(llm__num_ctx=3 * 1100 + 512 + 512), monkeypatch)
     assert run_query("What does a 404 status code mean?").success is True
 
 
@@ -412,16 +433,16 @@ def test_main_invalid_query_argument(capsys):
 
 def test_main_success_without_timings(monkeypatch, capsys):
     monkeypatch.setattr(
-        query, "query", lambda q, config_dir: QueryResponse(success=True, answer="the answer")
+        query, "query", lambda q, config_dir, data_dir: QueryResponse(success=True, answer="the answer")
     )
     assert main(["anything"]) == 0
     assert capsys.readouterr().out.strip() == "the answer"
 
 
-def test_main_config_dir_flag_selects_the_directory(setup, tmp_path, index_path):
+def test_main_config_dir_flag_selects_the_directory(setup, tmp_path):
     flag_dir = tmp_path / "flag"
     flag_dir.mkdir()
-    data = _with(index_path=index_path, llm__model="other")
+    data = _with(llm__model="other")
     (flag_dir / "query.json").write_text(json.dumps(data), encoding="utf-8")
     assert main(["What does a 404 status code mean?", "--config-dir", str(flag_dir)]) == 0
     assert setup.calls[0][2].model == "other"
@@ -434,6 +455,23 @@ def test_main_missing_config_dir_names_the_flag(tmp_path, capsys):
     assert captured.out == ""
     assert missing in captured.err
     assert "(from --config-dir)" in captured.err
+
+
+def test_main_data_dir_flag_selects_the_index(setup, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv(paths.DATA_DIR_ENV, str(tmp_path / "missing"))
+    flag_dir = _data_dir(tmp_path / "flag")
+    assert main(["What does a 404 status code mean?", "--data-dir", flag_dir]) == 0
+    assert "Not found means 404." in capsys.readouterr().out
+
+
+def test_main_data_dir_without_an_index(setup, tmp_path, capsys):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert main(["What does a 404 status code mean?", "--data-dir", str(empty)]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert str(empty / "index.db") in captured.err
+    assert "rfc-ingest" in captured.err
 
 
 # --- Real model (task 4.1) ---

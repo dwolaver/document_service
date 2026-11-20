@@ -2,6 +2,7 @@ import os
 
 import pytest
 
+from rfc_qa import paths
 from rfc_qa.chunk import Chunk
 from rfc_qa.retrieval import keyword_index
 from rfc_qa.retrieval.keyword_index import build_index, main, read_metadata, search
@@ -169,6 +170,38 @@ def test_cli_reports_no_matches(index_path, capsys):
 def test_cli_missing_index_is_non_zero(tmp_path, capsys):
     assert main(["handshake", "--index", str(tmp_path / "missing.db")]) != 0
     assert "Index not found" in capsys.readouterr().err
+
+
+def _data_dir_with_index(path):
+    path.mkdir()
+    assert build_index(CHUNKS, METADATA, str(path / "index.db")) is True
+    return str(path)
+
+
+def test_cli_data_dir_flag_finds_its_index(tmp_path, capsys):
+    data_dir = _data_dir_with_index(tmp_path / "flag")
+    assert main(["ECONNRESET", "--data-dir", data_dir]) == 0
+    assert "rfc9110-s1-p0" in capsys.readouterr().out
+
+
+def test_cli_data_dir_from_the_environment(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv(paths.DATA_DIR_ENV, _data_dir_with_index(tmp_path / "env"))
+    assert main(["ECONNRESET"]) == 0
+    assert "rfc9110-s1-p0" in capsys.readouterr().out
+
+
+def test_cli_index_flag_wins_over_the_data_directory(index_path, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv(paths.DATA_DIR_ENV, str(tmp_path / "empty"))
+    assert main(["ECONNRESET", "--index", index_path]) == 0
+    assert "rfc9110-s1-p0" in capsys.readouterr().out
+
+
+def test_cli_data_dir_without_an_index(tmp_path, capsys):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert main(["handshake", "--data-dir", str(empty)]) != 0
+    assert "Run rfc-ingest" in capsys.readouterr().err
+    assert os.listdir(empty) == []
 
 
 def test_long_excerpts_are_shortened():

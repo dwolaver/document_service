@@ -17,8 +17,6 @@ from rfc_qa.ingestion.rfc_downloader import download_rfc
 from rfc_qa.ingestion.rfc_parser import parse_rfc
 from rfc_qa.retrieval.keyword_index import build_index
 
-DEFAULT_DATA_DIR = paths.DATA_DIR
-
 FAMILIES = ("http", "tls", "tcp")
 
 
@@ -170,14 +168,14 @@ def run_ingestion(corpus_path, config_path, data_dir):
     """Build the index, returning an :class:`IngestSummary` or raising :class:`IngestError`."""
     entries = load_corpus(corpus_path)
     config = load_config(config_path)
-    rfc_dir = os.path.join(data_dir, "rfcs")
+    rfc_dir = os.path.join(data_dir, paths.RFCS_FOLDER)
     _ensure_downloaded(entries, rfc_dir)
 
     chunks = []
     for entry in entries:
         chunks.extend(_chunk_rfc(entry, rfc_dir, config.max_chunk_chars))
 
-    if not build_index(chunks, config.as_metadata(), os.path.join(data_dir, "index.db")):
+    if not build_index(chunks, config.as_metadata(), os.path.join(data_dir, paths.INDEX_FILE)):
         raise IngestError("Index build failed.")
     return IngestSummary(len(entries), len(chunks), max(len(chunk.text) for chunk in chunks))
 
@@ -211,12 +209,17 @@ def main(argv=None):
         "--config",
         help="Path to the ingestion configuration, instead of the one in the configuration directory.",
     )
-    parser.add_argument("--data-dir", default=DEFAULT_DATA_DIR, help="Directory for RFCs and index.")
+    parser.add_argument(
+        "--data-dir",
+        help="Directory for the downloaded RFCs and the index. Defaults to ${e}, then data/ at the "
+        "repository root.".format(e=paths.DATA_DIR_ENV),
+    )
     args = parser.parse_args(argv)
 
     try:
         corpus_path, config_path = _input_paths(args)
-        summary = run_ingestion(corpus_path, config_path, args.data_dir)
+        data_dir = paths.resolve_data_dir(args.data_dir)
+        summary = run_ingestion(corpus_path, config_path, data_dir.path)
     except (IngestError, paths.ConfigDirError) as exc:
         _log_error(str(exc))
         return 1

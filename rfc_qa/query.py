@@ -94,7 +94,6 @@ class QueryConfigError(Exception):
 
 @dataclass(frozen=True)
 class QueryConfig:
-    index_path: str
     retrieval_limit: int
     model: ModelSettings
 
@@ -147,13 +146,16 @@ def load_query_config(path):
     if not isinstance(data, dict):
         raise QueryConfigError("Config {p!r} must be a JSON object.".format(p=path))
 
-    index_path = _non_empty_string(data.get("index_path"), "index_path")
+    if "index_path" in data:
+        raise QueryConfigError(
+            "Config index_path is no longer used: the index is {f} in the data directory "
+            "(--data-dir or {e}).".format(f=paths.INDEX_FILE, e=paths.DATA_DIR_ENV)
+        )
     retrieval = _section(data, "retrieval")
     llm = _section(data, "llm")
     base_url = _non_empty_string(llm.get("base_url"), "llm.base_url")
     base_url = os.environ.get(OLLAMA_BASE_URL_ENV) or base_url
     return QueryConfig(
-        index_path=os.path.join(paths.REPO_ROOT, index_path),
         retrieval_limit=_positive_integer(retrieval.get("limit"), "retrieval.limit"),
         model=ModelSettings(
             model=_non_empty_string(llm.get("model"), "llm.model"),
@@ -227,14 +229,14 @@ def _citation(chunk):
     )
 
 
-def _answer(user_query, config):
+def _answer(user_query, config, index_path):
     clock = _Clock()
 
-    chunk_tokens = _chunk_token_target(config.index_path)
+    chunk_tokens = _chunk_token_target(index_path)
     if chunk_tokens is None:
         return _failure(
             QueryErrorCode.INDEX_UNAVAILABLE,
-            "The index at {p!r} can't be read. Build it with `rfc-ingest`.".format(p=config.index_path),
+            "The index at {p!r} can't be read. Build it with `rfc-ingest`.".format(p=index_path),
             clock.timings(),
         )
     budget_error = _budget_error(config, chunk_tokens)
@@ -242,12 +244,12 @@ def _answer(user_query, config):
         return _failure(QueryErrorCode.CONFIG_INVALID, budget_error, clock.timings())
 
     retrieval_start = time.perf_counter()
-    results = search(config.index_path, user_query, config.retrieval_limit)
+    results = search(index_path, user_query, config.retrieval_limit)
     clock.retrieval_ms = _elapsed_ms(retrieval_start)
     if results is None:
         return _failure(
             QueryErrorCode.INDEX_UNAVAILABLE,
-            "The index at {p!r} can't be searched.".format(p=config.index_path),
+            "The index at {p!r} can't be searched.".format(p=index_path),
             clock.timings(),
         )
     if not results:
@@ -273,11 +275,13 @@ def _answer(user_query, config):
     )
 
 
-def query(user_query, *, config_dir=None):
+def query(user_query, *, config_dir=None, data_dir=None):
     """Answer a natural-language query about RFCs.
 
     The query configuration is read from ``config_dir`` if given, then from the directory named by
-    ``RFC_QA_CONFIG_DIR``, then from ``config/`` at the repository root.
+    ``RFC_QA_CONFIG_DIR``, then from ``config/`` at the repository root. The index is ``index.db`` in
+    ``data_dir`` if given, then in the directory named by ``RFC_QA_DATA_DIR``, then in ``data/`` at
+    the repository root.
 
     Returns a :class:`QueryResponse`. Expected failures, such as invalid input, a missing index or an
     unavailable model, are reported through the response rather than raised.
@@ -292,7 +296,9 @@ def query(user_query, *, config_dir=None):
         config = load_query_config(directory.file(paths.QUERY_CONFIG_FILE))
     except (paths.ConfigDirError, QueryConfigError) as exc:
         return _failure(QueryErrorCode.CONFIG_INVALID, str(exc))
-    return _answer(user_query, config)
+    selected_data_dir = paths.resolve_data_dir(data_dir, explicit_source="data_dir argument")
+    index_path = selected_data_dir.file(paths.INDEX_FILE)
+    return _answer(user_query, config, index_path)
 
 
 def _print_success(response):
@@ -327,6 +333,12 @@ def main(argv=None):
             q=paths.QUERY_CONFIG_FILE, e=paths.CONFIG_DIR_ENV
         ),
     )
+    parser.add_argument(
+        "--data-dir",
+        help="Directory holding {i}. Defaults to ${e}, then data/ at the repository root.".format(
+            i=paths.INDEX_FILE, e=paths.DATA_DIR_ENV
+        ),
+    )
     args = parser.parse_args(argv)
 
     # Resolved here, not in query(), so an error names the flag the user typed.
@@ -335,8 +347,9 @@ def main(argv=None):
     except paths.ConfigDirError as exc:
         _log_error(str(exc))
         return 1
+    data_dir = paths.resolve_data_dir(args.data_dir)
 
-    response = query(args.query, config_dir=config_dir.path)
+    response = query(args.query, config_dir=config_dir.path, data_dir=data_dir.path)
     if response.success:
         _print_success(response)
         return 0

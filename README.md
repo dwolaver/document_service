@@ -131,8 +131,9 @@ check. It doesn't affect any other check, so the tests must still pass.
 
 ## Building the index
 
-Ingestion downloads any missing RFCs into `data/`, then builds the search index at `data/index.db`.
-The first run needs network access to rfc-editor.org. `data/` is generated, so it isn't committed.
+Ingestion downloads any missing RFCs into the data directory, `data/` by default, then builds the
+search index there as `index.db`. The first run needs network access to rfc-editor.org. `data/` is
+generated, so it isn't committed.
 
 ```
 rfc-ingest
@@ -144,6 +145,10 @@ To search the index from the command line:
 rfc-search "three-way handshake"
 rfc-search "Content-Length" --limit 3
 ```
+
+`rfc-search` reads `index.db` from the data directory, chosen with `--data-dir` or `RFC_QA_DATA_DIR`
+as described below. `--index` names a single index file instead, and takes precedence over the data
+directory.
 
 Configuration lives in [`config/`](config). [`config/corpus.json`](config/corpus.json) lists the
 RFCs, with their family and title. [`config/ingest.json`](config/ingest.json) sets the chunk size
@@ -161,12 +166,23 @@ To read the configuration from another directory, such as a mounted folder in a 
 with `--config-dir` or the `RFC_QA_CONFIG_DIR` environment variable. The flag wins over the
 variable, and both win over `config/`. A relative path resolves from the working directory, and an
 empty variable counts as unset. `--corpus` and `--config` name a single manifest or ingestion
-configuration file instead, and take precedence over the directory for that file. The index is still
-written to `data/` at the repository root unless `--data-dir` says otherwise.
+configuration file instead, and take precedence over the directory for that file.
 
 ```
 RFC_QA_CONFIG_DIR=/srv/rfc-qa/config rfc-ingest
 rfc-ingest --config-dir staging --corpus small-corpus.json
+```
+
+Generated data goes in one data directory: the downloaded RFCs in its `rfcs/` folder and the index in
+`index.db`. To put it somewhere else, such as a mounted volume, name the directory with `--data-dir`
+or the `RFC_QA_DATA_DIR` environment variable. The precedence is the same as for configuration: the
+flag, then the variable, then `data/` at the repository root. `rfc-ingest` creates the directory if
+it doesn't exist. `rfc-query` and `rfc-search` choose their data directory the same way, so they read
+the index that `rfc-ingest` built there.
+
+```
+RFC_QA_DATA_DIR=/srv/rfc-qa/data rfc-ingest
+rfc-ingest --data-dir scratch
 ```
 
 A configuration directory that doesn't exist stops the run before anything is downloaded, with a
@@ -200,8 +216,9 @@ that happened. From Python, `rfc_qa.query.query()` returns the same result, with
 
 [`config/query.json`](config/query.json) sets the model, the Ollama address, the context window,
 the answer length limit, the request timeout and how many passages to retrieve. A query fails before
-calling the model if those passages and the answer wouldn't fit in the context window. A relative
-`index_path` resolves from the repository root, whichever configuration directory is in use.
+calling the model if those passages and the answer wouldn't fit in the context window. The index
+location isn't a setting: it's always `index.db` in the data directory. A `query.json` that still
+sets `index_path` is rejected with a configuration error, so delete that line from any private copy.
 
 When the `OLLAMA_BASE_URL` environment variable is set and not empty, it replaces the Ollama address
 from `query.json`, for example to reach Ollama in another container. The file must still give an
@@ -213,12 +230,15 @@ OLLAMA_BASE_URL=http://ollama:11434 rfc-query "What does a 404 status code mean?
 ```
 
 `rfc-query` reads its configuration from `--config-dir`, then `RFC_QA_CONFIG_DIR`, then `config/`,
-in the same way as `rfc-ingest`. From Python, `query(question, config_dir=...)` takes the directory
-ahead of the variable. A directory that doesn't exist gives a configuration error naming it and where
-it was set.
+and its index from `--data-dir`, then `RFC_QA_DATA_DIR`, then `data/`, in the same way as
+`rfc-ingest`. From Python, `query(question, config_dir=..., data_dir=...)` takes either directory
+ahead of its variable. A configuration directory that doesn't exist gives a configuration error naming
+it and where it was set. A data directory without an index gives the index error, which names the
+index path and says to run `rfc-ingest`.
 
 ```
 rfc-query --config-dir staging "What does a 404 status code mean?"
+rfc-query --data-dir /srv/rfc-qa/data "What does a 404 status code mean?"
 ```
 
 ## Updating ARCHITECTURE.md

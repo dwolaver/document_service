@@ -1,5 +1,6 @@
 import json
 import os
+import pathlib
 
 import pytest
 
@@ -184,7 +185,7 @@ def workspace(tmp_path, monkeypatch):
     def fake_download(number, directory):
         downloads.append(number)
         name = {793: "early", 9110: "unpaginated"}[number]
-        _copy_fixture(name, tmp_path / "data" / "rfcs" / "rfc{n}.txt".format(n=number))
+        _copy_fixture(name, pathlib.Path(directory) / "rfc{n}.txt".format(n=number))
         return True
 
     monkeypatch.setattr(ingest, "download_rfc", fake_download)
@@ -378,3 +379,44 @@ def test_missing_config_directory_fails_before_downloading(
 def test_missing_config_directory_is_ignored_when_both_files_are_given(workspace, monkeypatch):
     monkeypatch.setenv(paths.CONFIG_DIR_ENV, os.path.join(workspace["data_dir"], "missing"))
     assert main(_main_args(workspace)) == 0
+
+
+# --- Data directory ---
+
+@pytest.fixture
+def ingestion_data_dirs(monkeypatch):
+    """Replace run_ingestion, recording the data directory it's given."""
+    data_dirs = []
+
+    def fake_run(corpus_path, config_path, data_dir):
+        data_dirs.append(data_dir)
+        return IngestSummary(1, 1, 1)
+
+    monkeypatch.setattr(ingest, "run_ingestion", fake_run)
+    return data_dirs
+
+
+def test_data_directory_defaults_to_data_at_the_repository_root(ingestion_data_dirs):
+    assert main([]) == 0
+    assert ingestion_data_dirs == [os.path.join(paths.REPO_ROOT, "data")]
+
+
+def test_environment_selects_the_data_directory(ingestion_data_dirs, tmp_path, monkeypatch):
+    monkeypatch.setenv(paths.DATA_DIR_ENV, str(tmp_path / "env"))
+    assert main([]) == 0
+    assert ingestion_data_dirs == [str(tmp_path / "env")]
+
+
+def test_flag_selects_the_data_directory_over_the_environment(
+    ingestion_data_dirs, tmp_path, monkeypatch
+):
+    monkeypatch.setenv(paths.DATA_DIR_ENV, str(tmp_path / "env"))
+    assert main(["--data-dir", str(tmp_path / "flag")]) == 0
+    assert ingestion_data_dirs == [str(tmp_path / "flag")]
+
+
+def test_missing_data_directory_is_created(workspace, tmp_path, monkeypatch):
+    data_dir = tmp_path / "new" / "data"
+    monkeypatch.setenv(paths.DATA_DIR_ENV, str(data_dir))
+    assert main(["--corpus", workspace["corpus"], "--config", workspace["config"]]) == 0
+    assert sorted(os.listdir(data_dir)) == ["index.db", "rfcs"]
