@@ -17,8 +17,6 @@ from rfc_qa.ingestion.rfc_downloader import download_rfc
 from rfc_qa.ingestion.rfc_parser import parse_rfc
 from rfc_qa.retrieval.keyword_index import build_index
 
-DEFAULT_CORPUS_PATH = paths.CORPUS_PATH
-DEFAULT_CONFIG_PATH = paths.INGEST_CONFIG_PATH
 DEFAULT_DATA_DIR = paths.DATA_DIR
 
 FAMILIES = ("http", "tls", "tcp")
@@ -184,17 +182,42 @@ def run_ingestion(corpus_path, config_path, data_dir):
     return IngestSummary(len(entries), len(chunks), max(len(chunk.text) for chunk in chunks))
 
 
+def _input_paths(args):
+    """Return the manifest and configuration paths, taking from the configuration directory only
+    the files no flag names, so the directory is resolved only when it's used."""
+    corpus_path, config_path = args.corpus, args.config
+    if corpus_path is None or config_path is None:
+        config_dir = paths.resolve_config_dir(args.config_dir)
+        if corpus_path is None:
+            corpus_path = config_dir.file(paths.CORPUS_FILE)
+        if config_path is None:
+            config_path = config_dir.file(paths.INGEST_CONFIG_FILE)
+    return corpus_path, config_path
+
+
 def main(argv=None):
     """Console entry point: build the index, print a summary and return an exit code."""
     parser = argparse.ArgumentParser(description="Build the RFC search index.")
-    parser.add_argument("--corpus", default=DEFAULT_CORPUS_PATH, help="Path to the corpus manifest.")
-    parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, help="Path to the configuration.")
+    parser.add_argument(
+        "--config-dir",
+        help="Directory holding {c} and {i}. Defaults to ${e}, then config/ at the repository "
+        "root.".format(c=paths.CORPUS_FILE, i=paths.INGEST_CONFIG_FILE, e=paths.CONFIG_DIR_ENV),
+    )
+    parser.add_argument(
+        "--corpus",
+        help="Path to the corpus manifest, instead of the one in the configuration directory.",
+    )
+    parser.add_argument(
+        "--config",
+        help="Path to the ingestion configuration, instead of the one in the configuration directory.",
+    )
     parser.add_argument("--data-dir", default=DEFAULT_DATA_DIR, help="Directory for RFCs and index.")
     args = parser.parse_args(argv)
 
     try:
-        summary = run_ingestion(args.corpus, args.config, args.data_dir)
-    except IngestError as exc:
+        corpus_path, config_path = _input_paths(args)
+        summary = run_ingestion(corpus_path, config_path, args.data_dir)
+    except (IngestError, paths.ConfigDirError) as exc:
         _log_error(str(exc))
         return 1
 

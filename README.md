@@ -145,8 +145,9 @@ rfc-search "three-way handshake"
 rfc-search "Content-Length" --limit 3
 ```
 
-[`corpus.json`](corpus.json) lists the RFCs, with their family and title.
-[`ingest_config.json`](ingest_config.json) sets the chunk size limit:
+Configuration lives in [`config/`](config). [`config/corpus.json`](config/corpus.json) lists the
+RFCs, with their family and title. [`config/ingest.json`](config/ingest.json) sets the chunk size
+limit:
 
 - `embedding_model` is the embedding model and its token limit, which is the hard ceiling.
 - `target_chunk_tokens` is the chunk size to aim for inside that ceiling.
@@ -155,6 +156,21 @@ rfc-search "Content-Length" --limit 3
 
 The maximum chunk size in characters is `target_chunk_tokens` x `chars_per_token`. The index
 records the configuration that built it.
+
+To read the configuration from another directory, such as a mounted folder in a container, name it
+with `--config-dir` or the `RFC_QA_CONFIG_DIR` environment variable. The flag wins over the
+variable, and both win over `config/`. A relative path resolves from the working directory, and an
+empty variable counts as unset. `--corpus` and `--config` name a single manifest or ingestion
+configuration file instead, and take precedence over the directory for that file. The index is still
+written to `data/` at the repository root unless `--data-dir` says otherwise.
+
+```
+RFC_QA_CONFIG_DIR=/srv/rfc-qa/config rfc-ingest
+rfc-ingest --config-dir staging --corpus small-corpus.json
+```
+
+A configuration directory that doesn't exist stops the run before anything is downloaded, with a
+message naming the directory and whether it came from the flag, the variable or the default.
 
 ## Asking a question
 
@@ -182,9 +198,28 @@ on the first question after it has been idle, which takes a few seconds, and the
 that happened. From Python, `rfc_qa.query.query()` returns the same result, with timings and a
 `cold_start` flag, so that slow first answers can be left out of performance figures.
 
-[`query_config.json`](query_config.json) sets the model, the Ollama address, the context window,
+[`config/query.json`](config/query.json) sets the model, the Ollama address, the context window,
 the answer length limit, the request timeout and how many passages to retrieve. A query fails before
-calling the model if those passages and the answer wouldn't fit in the context window.
+calling the model if those passages and the answer wouldn't fit in the context window. A relative
+`index_path` resolves from the repository root, whichever configuration directory is in use.
+
+When the `OLLAMA_BASE_URL` environment variable is set and not empty, it replaces the Ollama address
+from `query.json`, for example to reach Ollama in another container. The file must still give an
+address of its own. If Ollama can't be reached, the error names the address that was tried, which
+shows when a leftover variable is redirecting queries.
+
+```
+OLLAMA_BASE_URL=http://ollama:11434 rfc-query "What does a 404 status code mean?"
+```
+
+`rfc-query` reads its configuration from `--config-dir`, then `RFC_QA_CONFIG_DIR`, then `config/`,
+in the same way as `rfc-ingest`. From Python, `query(question, config_dir=...)` takes the directory
+ahead of the variable. A directory that doesn't exist gives a configuration error naming it and where
+it was set.
+
+```
+rfc-query --config-dir staging "What does a 404 status code mean?"
+```
 
 ## Updating ARCHITECTURE.md
 

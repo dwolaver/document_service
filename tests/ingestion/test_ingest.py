@@ -3,9 +3,16 @@ import os
 
 import pytest
 
+from rfc_qa import paths
 from rfc_qa.ingestion import ingest
-from rfc_qa.ingestion.ingest import IngestError, load_config, load_corpus, main, run_ingestion
-from rfc_qa.paths import REPO_ROOT
+from rfc_qa.ingestion.ingest import (
+    IngestError,
+    IngestSummary,
+    load_config,
+    load_corpus,
+    main,
+    run_ingestion,
+)
 from rfc_qa.retrieval.keyword_index import read_metadata, search
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -92,7 +99,7 @@ def test_missing_manifest_is_rejected(tmp_path):
 
 
 def test_real_corpus_loads_and_has_the_obsolete_pairs():
-    entries = load_corpus(os.path.join(REPO_ROOT, "corpus.json"))
+    entries = load_corpus(os.path.join(paths.DEFAULT_CONFIG_DIR, "corpus.json"))
     numbers = {entry.number for entry in entries}
     assert len(entries) == 59
     assert {793, 9293, 2616, 9110, 8446, 9846} <= numbers
@@ -156,7 +163,7 @@ def test_missing_config_value_is_rejected(tmp_path, key):
 
 
 def test_real_config_loads():
-    config = load_config(os.path.join(REPO_ROOT, "ingest_config.json"))
+    config = load_config(os.path.join(paths.DEFAULT_CONFIG_DIR, "ingest.json"))
     assert config.embedding_model_name == "nomic-embed-text"
     assert 0 < config.max_chunk_chars
 
@@ -295,3 +302,79 @@ def test_invalid_config_fails_before_writing_an_index(workspace, tmp_path, capsy
     assert "exceeds" in capsys.readouterr().err
     assert workspace["downloads"] == []
     assert not os.path.exists(workspace["index"])
+
+
+# --- Configuration directory ---
+
+@pytest.fixture
+def ingestion_inputs(monkeypatch):
+    """Replace run_ingestion, recording the manifest and configuration paths it's given."""
+    calls = []
+
+    def fake_run(corpus_path, config_path, data_dir):
+        calls.append((corpus_path, config_path))
+        return IngestSummary(1, 1, 1)
+
+    monkeypatch.setattr(ingest, "run_ingestion", fake_run)
+    return calls
+
+
+def _config_dir(path):
+    path.mkdir()
+    return str(path)
+
+
+def test_defaults_read_from_the_config_directory(ingestion_inputs, tmp_path):
+    assert main(["--data-dir", str(tmp_path)]) == 0
+    assert ingestion_inputs == [(
+        os.path.join(paths.DEFAULT_CONFIG_DIR, "corpus.json"),
+        os.path.join(paths.DEFAULT_CONFIG_DIR, "ingest.json"),
+    )]
+
+
+def test_environment_selects_the_config_directory(ingestion_inputs, tmp_path, monkeypatch):
+    directory = _config_dir(tmp_path / "env")
+    monkeypatch.setenv(paths.CONFIG_DIR_ENV, directory)
+    assert main(["--data-dir", str(tmp_path)]) == 0
+    assert ingestion_inputs == [(
+        os.path.join(directory, "corpus.json"), os.path.join(directory, "ingest.json")
+    )]
+
+
+def test_flag_selects_the_config_directory_over_the_environment(ingestion_inputs, tmp_path, monkeypatch):
+    directory = _config_dir(tmp_path / "flag")
+    monkeypatch.setenv(paths.CONFIG_DIR_ENV, _config_dir(tmp_path / "env"))
+    assert main(["--config-dir", directory, "--data-dir", str(tmp_path)]) == 0
+    assert ingestion_inputs == [(
+        os.path.join(directory, "corpus.json"), os.path.join(directory, "ingest.json")
+    )]
+
+
+def test_corpus_flag_with_a_config_directory(ingestion_inputs, tmp_path):
+    directory = _config_dir(tmp_path / "flag")
+    corpus = str(tmp_path / "elsewhere.json")
+    assert main(["--config-dir", directory, "--corpus", corpus, "--data-dir", str(tmp_path)]) == 0
+    assert ingestion_inputs == [(corpus, os.path.join(directory, "ingest.json"))]
+
+
+@pytest.mark.parametrize("use_env, source", [(False, "--config-dir"), (True, "RFC_QA_CONFIG_DIR")])
+def test_missing_config_directory_fails_before_downloading(
+    workspace, monkeypatch, capsys, use_env, source
+):
+    missing = os.path.join(workspace["data_dir"], "missing")
+    args = ["--data-dir", workspace["data_dir"]]
+    if use_env:
+        monkeypatch.setenv(paths.CONFIG_DIR_ENV, missing)
+    else:
+        args += ["--config-dir", missing]
+    assert main(args) == 1
+    err = capsys.readouterr().err
+    assert missing in err
+    assert "(from {s})".format(s=source) in err
+    assert workspace["downloads"] == []
+    assert not os.path.exists(workspace["index"])
+
+
+def test_missing_config_directory_is_ignored_when_both_files_are_given(workspace, monkeypatch):
+    monkeypatch.setenv(paths.CONFIG_DIR_ENV, os.path.join(workspace["data_dir"], "missing"))
+    assert main(_main_args(workspace)) == 0

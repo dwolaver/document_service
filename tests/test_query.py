@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from rfc_qa import query
+from rfc_qa import paths, query
 from rfc_qa.chunk import Chunk
 from rfc_qa.generation import answer_generator
 from rfc_qa.generation.answer_generator import ModelResponseError, ModelUnavailableError
@@ -32,9 +32,10 @@ CHUNKS = [
 
 
 def _write_config(tmp_path, data, monkeypatch):
-    path = tmp_path / "query_config.json"
+    """Write ``query.json`` to ``tmp_path`` and select it through the environment variable."""
+    path = tmp_path / "query.json"
     path.write_text(json.dumps(data), encoding="utf-8")
-    monkeypatch.setattr(query, "CONFIG_PATH", str(path))
+    monkeypatch.setenv(paths.CONFIG_DIR_ENV, str(tmp_path))
     return str(path)
 
 
@@ -87,14 +88,70 @@ def setup(tmp_path, monkeypatch, index_path):
 # --- Configuration (task 1.1) ---
 
 def test_real_config_loads():
-    config = load_query_config(os.path.join(REPO_ROOT, "query_config.json"))
+    config = load_query_config(os.path.join(paths.DEFAULT_CONFIG_DIR, "query.json"))
     assert config.model.model == "llama3.2"
     assert config.retrieval_limit == 5
     assert config.index_path == os.path.join(REPO_ROOT, "data", "index.db")
 
 
-def test_default_config_is_at_the_repository_root():
-    assert query.CONFIG_PATH == os.path.join(REPO_ROOT, "query_config.json")
+def _spy_on_config_path(monkeypatch):
+    """Record the configuration path a query reads, stopping the query there."""
+    read = []
+
+    def fake_load(path):
+        read.append(path)
+        raise query.QueryConfigError("stop")
+
+    monkeypatch.setattr(query, "load_query_config", fake_load)
+    return read
+
+
+def test_default_config_is_in_the_config_directory(monkeypatch):
+    read = _spy_on_config_path(monkeypatch)
+    run_query("What does 404 mean?")
+    assert read == [os.path.join(paths.DEFAULT_CONFIG_DIR, "query.json")]
+
+
+def test_config_dir_argument_over_environment(tmp_path, monkeypatch):
+    (tmp_path / "argument").mkdir()
+    (tmp_path / "env").mkdir()
+    monkeypatch.setenv(paths.CONFIG_DIR_ENV, str(tmp_path / "env"))
+    read = _spy_on_config_path(monkeypatch)
+    run_query("What does 404 mean?", config_dir=str(tmp_path / "argument"))
+    assert read == [str(tmp_path / "argument" / "query.json")]
+
+
+def test_environment_over_default(tmp_path, monkeypatch):
+    monkeypatch.setenv(paths.CONFIG_DIR_ENV, str(tmp_path))
+    read = _spy_on_config_path(monkeypatch)
+    run_query("What does 404 mean?")
+    assert read == [str(tmp_path / "query.json")]
+
+
+@pytest.mark.parametrize("use_env, source", [(False, "config_dir argument"), (True, "RFC_QA_CONFIG_DIR")])
+def test_missing_config_dir_is_a_config_error(tmp_path, monkeypatch, use_env, source):
+    missing = str(tmp_path / "missing")
+    if use_env:
+        monkeypatch.setenv(paths.CONFIG_DIR_ENV, missing)
+        response = run_query("What does 404 mean?")
+    else:
+        response = run_query("What does 404 mean?", config_dir=missing)
+    assert (response.success, response.error_code) == (False, QueryErrorCode.CONFIG_INVALID)
+    assert missing in response.error_string
+    assert source in response.error_string
+
+
+def test_config_in_another_directory_resolves_a_relative_index_from_the_repository_root(
+    tmp_path, monkeypatch
+):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "query.json").write_text(json.dumps(CONFIG), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    used = []
+    monkeypatch.setattr(query, "_answer", lambda user_query, config: used.append(config.index_path))
+    run_query("What does 404 mean?", config_dir=str(elsewhere))
+    assert used == [os.path.join(REPO_ROOT, "data", "index.db")]
 
 
 def test_relative_index_path_resolves_from_the_repository_root(tmp_path, monkeypatch):
@@ -139,10 +196,37 @@ def test_invalid_config_names_the_value(tmp_path, monkeypatch, changes, name):
     assert name in response.error_string
 
 
+def test_ollama_base_url_overrides_the_configured_address(tmp_path, monkeypatch):
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://ollama:11434")
+    config = load_query_config(_write_config(tmp_path, CONFIG, monkeypatch))
+    assert config.model.base_url == "http://ollama:11434"
+
+
+@pytest.mark.parametrize("value", [None, ""])
+def test_unset_or_empty_ollama_base_url_keeps_the_configured_address(tmp_path, monkeypatch, value):
+    if value is not None:
+        monkeypatch.setenv("OLLAMA_BASE_URL", value)
+    config = load_query_config(_write_config(tmp_path, CONFIG, monkeypatch))
+    assert config.model.base_url == "http://localhost:11434"
+
+
+def test_ollama_base_url_does_not_replace_a_missing_configured_address(tmp_path, monkeypatch):
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://ollama:11434")
+    _write_config(tmp_path, _with(llm__base_url=_MISSING), monkeypatch)
+    response = run_query("What does 404 mean?")
+    assert (response.success, response.error_code) == (False, QueryErrorCode.CONFIG_INVALID)
+    assert "llm.base_url" in response.error_string
+
+
+def test_ollama_base_url_reaches_the_model(setup, monkeypatch):
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://ollama:11434")
+    run_query("What does a 404 status code mean?")
+    assert setup.calls[0][2].base_url == "http://ollama:11434"
+
+
 def test_unreadable_config(tmp_path, monkeypatch):
-    path = tmp_path / "query_config.json"
-    path.write_text("{oops", encoding="utf-8")
-    monkeypatch.setattr(query, "CONFIG_PATH", str(path))
+    (tmp_path / "query.json").write_text("{oops", encoding="utf-8")
+    monkeypatch.setenv(paths.CONFIG_DIR_ENV, str(tmp_path))
     assert run_query("What does 404 mean?").error_code is QueryErrorCode.CONFIG_INVALID
 
 
@@ -327,9 +411,29 @@ def test_main_invalid_query_argument(capsys):
 
 
 def test_main_success_without_timings(monkeypatch, capsys):
-    monkeypatch.setattr(query, "query", lambda q: QueryResponse(success=True, answer="the answer"))
+    monkeypatch.setattr(
+        query, "query", lambda q, config_dir: QueryResponse(success=True, answer="the answer")
+    )
     assert main(["anything"]) == 0
     assert capsys.readouterr().out.strip() == "the answer"
+
+
+def test_main_config_dir_flag_selects_the_directory(setup, tmp_path, index_path):
+    flag_dir = tmp_path / "flag"
+    flag_dir.mkdir()
+    data = _with(index_path=index_path, llm__model="other")
+    (flag_dir / "query.json").write_text(json.dumps(data), encoding="utf-8")
+    assert main(["What does a 404 status code mean?", "--config-dir", str(flag_dir)]) == 0
+    assert setup.calls[0][2].model == "other"
+
+
+def test_main_missing_config_dir_names_the_flag(tmp_path, capsys):
+    missing = str(tmp_path / "missing")
+    assert main(["What does 404 mean?", "--config-dir", missing]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert missing in captured.err
+    assert "(from --config-dir)" in captured.err
 
 
 # --- Real model (task 4.1) ---

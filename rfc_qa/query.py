@@ -24,7 +24,8 @@ from rfc_qa.generation.answer_generator import (
 )
 from rfc_qa.retrieval.keyword_index import read_metadata, search
 
-CONFIG_PATH = paths.QUERY_CONFIG_PATH
+# When set and not empty, replaces the configured llm.base_url.
+OLLAMA_BASE_URL_ENV = "OLLAMA_BASE_URL"
 
 # Tokens reserved for the instructions, passage labels and the question.
 PROMPT_ALLOWANCE_TOKENS = 512
@@ -133,7 +134,11 @@ def _section(data, name):
 
 
 def load_query_config(path):
-    """Return the validated configuration, raising :class:`QueryConfigError` if it's invalid."""
+    """Return the validated configuration, raising :class:`QueryConfigError` if it's invalid.
+
+    ``OLLAMA_BASE_URL``, when set and not empty, replaces ``llm.base_url``. The file must still give
+    a valid ``llm.base_url``, so that it stays complete on its own.
+    """
     try:
         with open(path, encoding="utf-8") as config_file:
             data = json.load(config_file)
@@ -145,12 +150,14 @@ def load_query_config(path):
     index_path = _non_empty_string(data.get("index_path"), "index_path")
     retrieval = _section(data, "retrieval")
     llm = _section(data, "llm")
+    base_url = _non_empty_string(llm.get("base_url"), "llm.base_url")
+    base_url = os.environ.get(OLLAMA_BASE_URL_ENV) or base_url
     return QueryConfig(
         index_path=os.path.join(paths.REPO_ROOT, index_path),
         retrieval_limit=_positive_integer(retrieval.get("limit"), "retrieval.limit"),
         model=ModelSettings(
             model=_non_empty_string(llm.get("model"), "llm.model"),
-            base_url=_non_empty_string(llm.get("base_url"), "llm.base_url"),
+            base_url=base_url,
             num_ctx=_positive_integer(llm.get("num_ctx"), "llm.num_ctx"),
             max_answer_tokens=_positive_integer(llm.get("max_answer_tokens"), "llm.max_answer_tokens"),
             timeout_seconds=_positive_number(llm.get("timeout_seconds"), "llm.timeout_seconds"),
@@ -266,8 +273,11 @@ def _answer(user_query, config):
     )
 
 
-def query(user_query):
+def query(user_query, *, config_dir=None):
     """Answer a natural-language query about RFCs.
+
+    The query configuration is read from ``config_dir`` if given, then from the directory named by
+    ``RFC_QA_CONFIG_DIR``, then from ``config/`` at the repository root.
 
     Returns a :class:`QueryResponse`. Expected failures, such as invalid input, a missing index or an
     unavailable model, are reported through the response rather than raised.
@@ -278,8 +288,9 @@ def query(user_query):
             "Query must be a non-empty string with at least one non-whitespace token.",
         )
     try:
-        config = load_query_config(CONFIG_PATH)
-    except QueryConfigError as exc:
+        directory = paths.resolve_config_dir(config_dir, explicit_source="config_dir argument")
+        config = load_query_config(directory.file(paths.QUERY_CONFIG_FILE))
+    except (paths.ConfigDirError, QueryConfigError) as exc:
         return _failure(QueryErrorCode.CONFIG_INVALID, str(exc))
     return _answer(user_query, config)
 
@@ -310,9 +321,22 @@ def main(argv=None):
     """Console entry point: print the answer or error and return an exit code."""
     parser = argparse.ArgumentParser(description="Ask a question about RFCs.")
     parser.add_argument("query", help="The natural-language query to answer.")
+    parser.add_argument(
+        "--config-dir",
+        help="Directory holding {q}. Defaults to ${e}, then config/ at the repository root.".format(
+            q=paths.QUERY_CONFIG_FILE, e=paths.CONFIG_DIR_ENV
+        ),
+    )
     args = parser.parse_args(argv)
 
-    response = query(args.query)
+    # Resolved here, not in query(), so an error names the flag the user typed.
+    try:
+        config_dir = paths.resolve_config_dir(args.config_dir)
+    except paths.ConfigDirError as exc:
+        _log_error(str(exc))
+        return 1
+
+    response = query(args.query, config_dir=config_dir.path)
     if response.success:
         _print_success(response)
         return 0
