@@ -32,4 +32,56 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements-dev.txt
       - name: Run lint, format and type checks
+        # The gitleaks hook scans staged changes, so it has nothing to scan here. The secrets job
+        # scans the commits instead.
+        env:
+          SKIP: gitleaks
         run: pre-commit run --all-files
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The whole history, so that every commit in the range below is present.
+          fetch-depth: 0
+      - name: Read the gitleaks version from the pre-commit hook
+        id: version
+        run: |
+          version=$(awk '/repo: https:\/\/github.com\/gitleaks\/gitleaks/ { found = 1; next }
+            found && /rev:/ { print $2; exit }' .pre-commit-config.yaml)
+          if [ -z "$version" ]; then
+            echo "No rev found for the gitleaks hook in .pre-commit-config.yaml." >&2
+            exit 1
+          fi
+          echo "version=${version#v}" >> "$GITHUB_OUTPUT"
+      - name: Download gitleaks and check its checksum
+        working-directory: ${{ runner.temp }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}"
+          archive="gitleaks_${VERSION}_linux_x64.tar.gz"
+          checksums="gitleaks_${VERSION}_checksums.txt"
+          curl --fail --silent --show-error --location --remote-name "$base/$archive"
+          curl --fail --silent --show-error --location --remote-name "$base/$checksums"
+          grep " ${archive}\$" "$checksums" | sha256sum --check --strict
+          tar -xzf "$archive" gitleaks
+      - name: Scan the new commits for secrets
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          GITLEAKS: ${{ runner.temp }}/gitleaks
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            range="$BASE_SHA..$HEAD_SHA"
+          elif [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            range="$AFTER"
+          else
+            range="$BEFORE..$AFTER"
+          fi
+          echo "Scanning $range"
+          "$GITLEAKS" git --redact --verbose --no-banner --no-color --log-opts="$range" .
