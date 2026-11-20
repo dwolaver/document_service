@@ -77,8 +77,7 @@ def _write_index(path, chunks, metadata):
             "INSERT INTO chunks (chunk_id, rfc_number, rfc_title, family, section_number,"
             " section_title, text) VALUES (?, ?, ?, ?, ?, ?, ?)",
             [
-                (c.chunk_id, c.rfc_number, c.rfc_title, c.family, c.section_number,
-                 c.section_title, c.text)
+                (c.chunk_id, c.rfc_number, c.rfc_title, c.family, c.section_number, c.section_title, c.text)
                 for c in chunks
             ],
         )
@@ -179,9 +178,7 @@ def main(argv=None):
             i=paths.INDEX_FILE, e=paths.DATA_DIR_ENV
         ),
     )
-    parser.add_argument(
-        "--index", help="Path to the index file, instead of the one in the data directory."
-    )
+    parser.add_argument("--index", help="Path to the index file, instead of the one in the data directory.")
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="Maximum results.")
     args = parser.parse_args(argv)
 

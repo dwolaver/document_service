@@ -46,6 +46,7 @@ def _fail_if_called(monkeypatch):
 
 # --- Input validation (task 2.1) ---
 
+
 def test_rejects_non_integer_and_out_of_range(monkeypatch, tmp_path):
     _fail_if_called(monkeypatch)
     for bad in ["791", None, 0, -5, True, 9110.0]:
@@ -60,6 +61,7 @@ def test_accepts_valid_integer(monkeypatch, tmp_path):
 
 # --- Missing directory (task 2.2) ---
 
+
 def test_missing_directory_returns_false_and_not_created(monkeypatch, tmp_path):
     _fail_if_called(monkeypatch)
     missing = tmp_path / "does_not_exist"
@@ -69,6 +71,7 @@ def test_missing_directory_returns_false_and_not_created(monkeypatch, tmp_path):
 
 # --- Idempotent skip (task 3.1) ---
 
+
 def test_skips_download_when_file_exists(monkeypatch, tmp_path):
     (tmp_path / "rfc9110.txt").write_bytes(b"already here")
     _fail_if_called(monkeypatch)
@@ -77,6 +80,7 @@ def test_skips_download_when_file_exists(monkeypatch, tmp_path):
 
 
 # --- Fetch errors (tasks 4.1, 4.2) ---
+
 
 def test_network_error_returns_false(monkeypatch, tmp_path):
     _patch_get(monkeypatch, exc=rfc_downloader.requests.RequestException("boom"))
@@ -91,6 +95,7 @@ def test_non_200_returns_false(monkeypatch, tmp_path):
 
 
 # --- Verification (task 4.3) ---
+
 
 def test_modern_header_accepted(monkeypatch, tmp_path):
     _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY))}))
@@ -126,6 +131,7 @@ def test_verification_passes_without_content_length(monkeypatch, tmp_path):
 
 # --- Atomic storage (tasks 5.1, 5.2) ---
 
+
 def test_final_file_contains_full_bytes(monkeypatch, tmp_path):
     _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY))}))
     assert download_rfc(9110, str(tmp_path)) is True
@@ -152,6 +158,7 @@ def test_no_temp_left_after_write_failure(monkeypatch, tmp_path):
 
 # --- End-to-end across paths with a mocked HTTP layer (task 6.1) ---
 
+
 def test_end_to_end_paths(monkeypatch, tmp_path):
     # success
     _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY))}))
@@ -177,6 +184,7 @@ def test_end_to_end_paths(monkeypatch, tmp_path):
 
 
 # --- Network-gated integration (task 4.4) ---
+
 
 @pytest.mark.integration
 @pytest.mark.skipif(

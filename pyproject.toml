@@ -19,3 +19,19 @@ rfc-search = "rfc_qa.retrieval.keyword_index:main"
 
 [tool.setuptools.packages.find]
 include = ["rfc_qa*"]
+
+[tool.ruff]
+line-length = 110
+# Python files only. ruff also formats code blocks in Markdown by default, which would reach the
+# archived OpenSpec records.
+include = ["*.py"]
+
+[tool.ruff.lint]
+# pyflakes and pycodestyle errors, plus import sorting and bugbear. Listed explicitly, because ruff's
+# own default set is broader and changes between releases.
+select = ["E4", "E7", "E9", "F", "I", "B"]
+
+[tool.mypy]
+files = ["rfc_qa", "scripts", "tests"]
+explicit_package_bases = true
+warn_unused_configs = true

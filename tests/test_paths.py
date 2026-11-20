@@ -63,11 +63,8 @@ def test_missing_directory_names_path_and_source(tmp_path, monkeypatch, use_env,
     missing = str(tmp_path / "missing")
     if use_env:
         monkeypatch.setenv(CONFIG_DIR_ENV, missing)
-        call = resolve_config_dir
-    else:
-        call = lambda: resolve_config_dir(missing)
     with pytest.raises(ConfigDirError) as excinfo:
-        call()
+        resolve_config_dir(None if use_env else missing)
     assert missing in str(excinfo.value)
     assert "(from {s})".format(s=source) in str(excinfo.value)
 
@@ -77,6 +74,7 @@ def test_config_dir_error_is_a_value_error():
 
 
 # --- Data directory ---
+
 
 def test_data_default_is_data_at_the_repository_root():
     assert paths.DEFAULT_DATA_DIR == os.path.join(paths.REPO_ROOT, "data")

@@ -148,9 +148,7 @@ def check_run(exit_code, result, pinned_model):
 
 
 def _git(root, *args):
-    return subprocess.run(
-        ["git", *args], cwd=root, capture_output=True, text=True, check=True
-    ).stdout
+    return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=True).stdout
 
 
 def _changed_paths(root):
@@ -186,11 +184,17 @@ def _other_changes(root, before):
 def _run_claude(root, release, model):
     """Run the skill headlessly. This is the only call to Claude Code, so tests replace it."""
     command = [
-        "claude", "-p", "/update-architecture {r}".format(r=release),
-        "--model", model,
-        "--output-format", "json",
-        "--allowedTools", ALLOWED_TOOLS,
-        "--permission-mode", "acceptEdits",
+        "claude",
+        "-p",
+        "/update-architecture {r}".format(r=release),
+        "--model",
+        model,
+        "--output-format",
+        "json",
+        "--allowedTools",
+        ALLOWED_TOOLS,
+        "--permission-mode",
+        "acceptEdits",
     ]
     return subprocess.run(command, cwd=root, capture_output=True, text=True, stdin=subprocess.DEVNULL)
 

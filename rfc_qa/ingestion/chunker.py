@@ -58,7 +58,5 @@ def chunk_sections(sections, rfc_number, rfc_title, family, max_chars):
             chunk_id = "rfc{rfc}-s{section}{suffix}-p{position}".format(
                 rfc=rfc_number, section=section.number, suffix=suffix, position=position
             )
-            chunks.append(
-                Chunk(chunk_id, rfc_number, rfc_title, family, section.number, section.title, text)
-            )
+            chunks.append(Chunk(chunk_id, rfc_number, rfc_title, family, section.number, section.title, text))
     return chunks

@@ -22,6 +22,7 @@ ALL_LAYOUTS = PAGINATED_LAYOUTS + ["unpaginated"]
 
 # --- Page furniture (task 2.2) ---
 
+
 @pytest.mark.parametrize("name", PAGINATED_LAYOUTS)
 def test_page_furniture_is_removed(name):
     cleaned = remove_page_furniture(_load(name))
@@ -41,7 +42,7 @@ def test_page_furniture_is_removed(name):
 )
 def test_paragraph_across_page_break_stays_adjacent(name, section, first, second):
     lines = _sections(name)[section].text.split("\n")
-    assert lines[lines.index(next(l for l in lines if first in l)) + 1] == second
+    assert lines[lines.index(next(line for line in lines if first in line)) + 1] == second
 
 
 def test_unpaginated_text_is_unchanged():
@@ -59,6 +60,7 @@ def test_body_line_that_mentions_a_page_is_kept():
 
 
 # --- Section detection (task 2.3) ---
+
 
 def test_modern_heading():
     text = "14.  One\n\n15.  Two\n\n15.5.  Three\n\n15.5.1.  400 Bad Request\n\n   Body.\n"
@@ -181,6 +183,7 @@ def test_body_text_with_no_headings_produces_no_sections():
 
 # --- Front and back matter (task 2.4) ---
 
+
 def test_abstract_is_a_section():
     sections = _sections("unpaginated")
     assert sections["abstract"].title == "Abstract"
@@ -193,8 +196,17 @@ def test_abstract_ends_before_status_memo():
 
 @pytest.mark.parametrize(
     "heading",
-    ["Index", "Authors' Addresses", "Author's Address", "Acknowledgments", "Acknowledgements",
-     "Contributors", "References", "Normative References", "Intellectual Property"],
+    [
+        "Index",
+        "Authors' Addresses",
+        "Author's Address",
+        "Acknowledgments",
+        "Acknowledgements",
+        "Contributors",
+        "References",
+        "Normative References",
+        "Intellectual Property",
+    ],
 )
 def test_back_matter_does_not_attach_to_the_last_section(heading):
     text = "1.  Last Section\n\n   Body text.\n\n{h}\n\n   Back matter.\n".format(h=heading)
@@ -205,8 +217,15 @@ def test_back_matter_does_not_attach_to_the_last_section(heading):
 
 @pytest.mark.parametrize(
     "marker",
-    ["Internet Standards Track", "Copyright (c)", "many contributions", "accelerator",
-     "Roy T. Fielding", "Rescorla", "Alvestrand"],
+    [
+        "Internet Standards Track",
+        "Copyright (c)",
+        "many contributions",
+        "accelerator",
+        "Roy T. Fielding",
+        "Rescorla",
+        "Alvestrand",
+    ],
 )
 def test_excluded_text_is_not_in_any_section(marker):
     for name in ("unpaginated", "paginated"):

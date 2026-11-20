@@ -1,0 +1,23 @@
+# Code quality checks, run before each commit and by CI's quality job.
+# The hooks run the tools from the project's virtual environment, so the versions pinned in
+# requirements-dev.txt are the only versions. Activate the environment before committing.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: ruff check
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: ruff format --check
+        entry: ruff format --check
+        language: system
+        types: [python]
+      - id: mypy
+        name: mypy
+        # Checks the whole project, so a change that breaks a caller in another module is caught.
+        entry: mypy
+        language: system
+        types: [python]
+        pass_filenames: false
