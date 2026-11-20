@@ -220,7 +220,9 @@ def test_success_builds_an_index_from_every_rfc(workspace):
     summary = _run(workspace)
     assert summary.rfc_count == 2
     assert summary.chunk_count > 2
-    rfcs = {r.chunk.rfc_number for r in search(workspace["index"], "introduction protocol", 50)}
+    results = search(workspace["index"], "introduction protocol", 50)
+    assert results is not None
+    rfcs = {r.chunk.rfc_number for r in results}
     assert rfcs == {793, 9110}
 
 
@@ -255,6 +257,7 @@ def test_two_runs_produce_the_same_chunks(workspace):
 def test_index_records_the_configuration(workspace):
     _run(workspace)
     metadata = read_metadata(workspace["index"])
+    assert metadata is not None
     assert metadata["embedding_model_name"] == "nomic-embed-text"
     assert metadata["embedding_max_tokens"] == "2048"
     assert metadata["chars_per_token"] == "2.7"

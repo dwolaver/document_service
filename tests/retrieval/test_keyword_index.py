@@ -45,8 +45,11 @@ def _ids(results):
 
 
 def test_build_writes_a_complete_index(index_path):
-    assert len(search(index_path, "handshake", 10)) == 2
-    assert search(index_path, "econnreset")[0].chunk == CHUNKS[3]
+    handshake = search(index_path, "handshake", 10)
+    assert handshake is not None and len(handshake) == 2
+    econnreset = search(index_path, "econnreset")
+    assert econnreset is not None
+    assert econnreset[0].chunk == CHUNKS[3]
 
 
 def test_index_records_its_configuration(index_path):
@@ -83,7 +86,9 @@ def test_exact_term_returns_its_chunk_first(index_path):
 
 
 def test_results_carry_metadata_and_scores(index_path):
-    result = search(index_path, "handshake")[0]
+    results = search(index_path, "handshake")
+    assert results is not None
+    result = results[0]
     assert result.chunk.rfc_title.startswith("RFC ")
     assert result.chunk.section_title
     assert result.score > 0
@@ -105,7 +110,8 @@ def test_title_match_ranks_above_body_match(tmp_path):
 
 
 def test_limit(index_path):
-    assert len(search(index_path, "the handshake field index", 2)) == 2
+    results = search(index_path, "the handshake field index", 2)
+    assert results is not None and len(results) == 2
 
 
 def test_zero_limit_returns_nothing(index_path):

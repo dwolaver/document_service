@@ -68,7 +68,9 @@ def test_missing_skill_is_rejected(tmp_path):
 
 def test_parse_result_takes_the_last_json_line():
     stdout = "[claude-code:warning] something\n" + json.dumps(_result({PINNED: 5}))
-    assert parse_result(stdout)["is_error"] is False
+    result = parse_result(stdout)
+    assert result is not None
+    assert result["is_error"] is False
 
 
 @pytest.mark.parametrize("stdout", ["", "not json", "[1, 2]"])
@@ -86,6 +88,7 @@ def test_smaller_helper_model_is_accepted():
 
 def test_larger_other_model_is_rejected():
     reason = check_run(0, _result({PINNED: 10, "claude-sonnet-5-5": 4000}), PINNED)
+    assert reason is not None
     assert "Another model" in reason
     assert "claude-sonnet-5-5: 4000 output tokens" in reason
 
@@ -96,17 +99,22 @@ def test_equal_other_model_is_rejected():
 
 def test_missing_pinned_model_is_rejected():
     reason = check_run(0, _result({"claude-haiku-5-5": 4000}), PINNED)
+    assert reason is not None
     assert "wasn't used" in reason
 
 
 def test_error_result_is_rejected_even_when_subtype_says_success():
     result = _result({}, is_error=True, result="There's an issue with the selected model")
     assert result["subtype"] == "success"
-    assert "issue with the selected model" in check_run(1, result, PINNED)
+    reason = check_run(1, result, PINNED)
+    assert reason is not None
+    assert "issue with the selected model" in reason
 
 
 def test_non_zero_exit_is_rejected():
-    assert "exit status 2" in check_run(2, _result({PINNED: 4000}), PINNED)
+    reason = check_run(2, _result({PINNED: 4000}), PINNED)
+    assert reason is not None
+    assert "exit status 2" in reason
 
 
 def test_missing_is_error_is_rejected():
@@ -116,7 +124,9 @@ def test_missing_is_error_is_rejected():
 
 
 def test_no_result_is_rejected():
-    assert "no JSON result" in check_run(1, None, PINNED)
+    reason = check_run(1, None, PINNED)
+    assert reason is not None
+    assert "no JSON result" in reason
 
 
 def test_no_model_usage_is_rejected():
@@ -277,7 +287,7 @@ def test_command_line_runs_the_pinned_model_with_limited_tools(monkeypatch, repo
         calls.append((command, kwargs))
         return SimpleNamespace(returncode=0, stdout=json.dumps(_result({PINNED: 1})), stderr="")
 
-    monkeypatch.setattr(ua.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(subprocess, "run", fake_subprocess_run)
     update_architecture(str(repo), "v0.1.0")
     command, kwargs = calls[0]
     assert command[:3] == ["claude", "-p", "/update-architecture v0.1.0"]
