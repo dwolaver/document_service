@@ -148,18 +148,6 @@ def test_missing_config_dir_is_a_config_error(tmp_path, monkeypatch, use_env, so
     assert source in response.error_string
 
 
-@pytest.mark.parametrize("value", ["data/index.db", "/srv/rfc-qa/index.db", ""])
-def test_index_path_left_in_the_config_is_rejected(tmp_path, monkeypatch, value):
-    elsewhere = tmp_path / "elsewhere"
-    elsewhere.mkdir()
-    data = {**CONFIG, "index_path": value}
-    (elsewhere / "query.json").write_text(json.dumps(data), encoding="utf-8")
-    response = run_query("What does 404 mean?", config_dir=str(elsewhere))
-    assert (response.success, response.error_code) == (False, QueryErrorCode.CONFIG_INVALID)
-    assert "index_path" in response.error_string
-    assert "data directory" in response.error_string
-
-
 def _spy_on_index_path(monkeypatch):
     """Record the index path a query is answered from, stopping the query there."""
     used = []

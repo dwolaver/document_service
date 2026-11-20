@@ -27,8 +27,8 @@ location.
 
 #### Scenario: Relative index path with another configuration directory
 
-- **WHEN** the configuration directory is outside the repository and its query configuration still gives a relative `index_path`
-- **THEN** the query fails with the configuration error code, saying that the index location comes from the data directory, rather than resolving that path
+- **WHEN** the configuration directory is outside the repository
+- **THEN** the query reads the index from the selected data directory, not from a path relative to the configuration directory or the repository root
 
 #### Scenario: Build and query agree
 

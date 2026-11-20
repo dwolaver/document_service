@@ -8,8 +8,7 @@ The service SHALL read the model name, Ollama address, context window size, requ
 length limit and retrieval limit from a version-controlled configuration. The index location SHALL
 come from the data directory, not from this configuration. When the `OLLAMA_BASE_URL` environment
 variable is set and not empty, its value SHALL replace the Ollama address from the configuration. It
-SHALL fail before calling the model when a value is missing or invalid, or when the configuration
-still gives an index path.
+SHALL fail before calling the model when a value is missing or invalid.
 
 #### Scenario: Different model
 
@@ -30,8 +29,3 @@ still gives an index path.
 
 - **WHEN** `OLLAMA_BASE_URL` is unset or empty
 - **THEN** requests go to the configuration's `llm.base_url`
-
-#### Scenario: Index path left in the configuration
-
-- **WHEN** the configuration gives `index_path`
-- **THEN** the response is a failure with the configuration error code, naming `index_path` and saying that the index location comes from the data directory

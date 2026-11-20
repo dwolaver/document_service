@@ -54,16 +54,14 @@ Alternative: a `DataDir` class beside `ConfigDir`. Rejected because the two woul
 ### `index_path` leaves the query configuration
 
 `load_query_config(path)` no longer returns an index path. `QueryConfig.index_path` is removed, and
-`_answer(user_query, config, index_path)` takes the index path as an argument. When the file still
-has an `index_path` key, whatever its value, loading raises `QueryConfigError`. For example:
-`Config index_path is no longer used: the index is index.db in the data directory (--data-dir or
-RFC_QA_DATA_DIR).` Other unknown keys stay ignored, as now. This one is rejected because it used to
-mean something.
+`_answer(user_query, config, index_path)` takes the index path as an argument. `config/query.json`
+drops the key.
 
-`config/query.json` drops the key.
+A leftover `index_path` isn't checked for: it's ignored like any other unknown key. The project
+isn't deployed anywhere yet, so the only query configuration is the one in this repository.
 
-Alternative: ignore `index_path` with a warning. Rejected because the service has no warning channel
-in its responses, and a silently ignored setting is the confusing case.
+Alternative: reject a configuration that still sets `index_path`, naming what replaced it. Rejected
+by the repository owner, because there are no other copies of the configuration to catch.
 
 ### `rfc-query` and the API
 
@@ -102,14 +100,11 @@ directory isn't resolved. Otherwise the index is `INDEX_FILE` in `resolve_data_d
 - In `tests/test_query.py`, the `setup` fixture builds its index as `index.db` in a temporary data
   directory and selects it with `RFC_QA_DATA_DIR`. Tests that need another index, such as a missing
   one or one without a chunk token target, select another data directory instead of setting
-  `index_path`. The tests of relative and absolute `index_path` resolution are replaced by tests that
-  reject the leftover key, and by tests of the data directory precedence through `data_dir` and
-  `--data-dir`.
+  `index_path`. The tests of relative and absolute `index_path` resolution are replaced by tests of
+  the data directory precedence through `data_dir` and `--data-dir`.
 
 ## Risks / Trade-offs
 
-- [A private `query.json` with `index_path` stops working] → Covered by the **BREAKING** note. The
-  error names the key and says what replaced it, so the fix is to delete one line.
 - [A leftover `RFC_QA_DATA_DIR` silently points queries at another index] → The missing-index message
   names the full path, and an index that exists but is the wrong one is the same risk the flag already
   has. The README documents the variable.
@@ -119,5 +114,4 @@ directory isn't resolved. Otherwise the index is `INDEX_FILE` in `resolve_data_d
 ## Migration Plan
 
 All in one pull request. Local commands work after it merges without any action, because the default
-data directory is still `data/` and the index is still `data/index.db`. Anyone with a private query
-configuration removes `index_path`. To roll back, revert the commit. The index format doesn't change.
+data directory is still `data/` and the index is still `data/index.db`. To roll back, revert the commit. The index format doesn't change.

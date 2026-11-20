@@ -21,9 +21,9 @@ same way the configuration directory is chosen now: without editing version-cont
   A relative directory resolves from the working directory, and an empty variable counts as unset.
 - The index is always `index.db` in the data directory, and downloaded RFCs are in its `rfcs/`
   folder. Every command finds the index the same way, so building and querying can't disagree.
-- **BREAKING** `index_path` is removed from the query configuration. A query configuration that still
-  sets it fails with a configuration error, which says that the index location now comes from the data
-  directory. Silently ignoring it would leave someone expecting it to work.
+- `index_path` is removed from the query configuration. The project isn't deployed anywhere yet, so
+  no other copies of the configuration need it. There's no check for a leftover key, which is ignored
+  like any other unknown key.
 - `rfc-search` keeps `--index` for pointing at one index file. It takes precedence over the data
   directory.
 - `rfc-ingest` creates the data directory if it doesn't exist, as it does now. For `rfc-query` and
@@ -44,8 +44,7 @@ existing `data/` directory.
 - `project-packaging`: Data resolves from a selectable data directory, which defaults to `data/` at
   the repository root. The rule for relative `index_path` values is replaced, and `rfc-search` keeps a
   single-file index override.
-- `answer-generation`: The index path is no longer part of the query configuration, and a
-  configuration that still sets it is rejected.
+- `answer-generation`: The index path is no longer part of the query configuration.
 
 ## Impact
 

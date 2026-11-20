@@ -217,8 +217,7 @@ that happened. From Python, `rfc_qa.query.query()` returns the same result, with
 [`config/query.json`](config/query.json) sets the model, the Ollama address, the context window,
 the answer length limit, the request timeout and how many passages to retrieve. A query fails before
 calling the model if those passages and the answer wouldn't fit in the context window. The index
-location isn't a setting: it's always `index.db` in the data directory. A `query.json` that still
-sets `index_path` is rejected with a configuration error, so delete that line from any private copy.
+location isn't a setting: it's always `index.db` in the data directory.
 
 When the `OLLAMA_BASE_URL` environment variable is set and not empty, it replaces the Ollama address
 from `query.json`, for example to reach Ollama in another container. The file must still give an

@@ -146,11 +146,6 @@ def load_query_config(path):
     if not isinstance(data, dict):
         raise QueryConfigError("Config {p!r} must be a JSON object.".format(p=path))
 
-    if "index_path" in data:
-        raise QueryConfigError(
-            "Config index_path is no longer used: the index is {f} in the data directory "
-            "(--data-dir or {e}).".format(f=paths.INDEX_FILE, e=paths.DATA_DIR_ENV)
-        )
     retrieval = _section(data, "retrieval")
     llm = _section(data, "llm")
     base_url = _non_empty_string(llm.get("base_url"), "llm.base_url")
