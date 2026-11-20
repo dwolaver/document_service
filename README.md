@@ -114,14 +114,35 @@ pytest
 `requirements-dev.txt` installs the project in editable mode, which provides the `rfc-ingest`,
 `rfc-query` and `rfc-search` commands. After pulling a change to `pyproject.toml`, run the `pip
 install` line again. The code lives in the `rfc_qa` package, with a subpackage each for ingestion,
-retrieval and generation. Configuration and `data/` stay at the repository root, and the commands
-find them there from any directory.
+retrieval and generation. Configuration lives in `config/` and generated data in `data/`, both at the
+repository root by default, and the commands find them there from any directory.
 
 The network integration test is skipped unless `RFC_DOWNLOADER_NETWORK_TESTS=1` is set.
 
-Changes reach `main` through pull requests. GitHub Actions runs the tests on each pull request
-and on each push to `main`, without network access to external document sources, and a pull
-request can't merge until they pass.
+The code is linted and formatted with [ruff](https://docs.astral.sh/ruff/) and type-checked with
+[mypy](https://mypy-lang.org/), both configured in `pyproject.toml`. A pre-commit hook runs all three
+checks before each commit. Install it once per clone:
+
+```
+pre-commit install
+```
+
+The hook runs the tools from the virtual environment, so activate it before committing. To run the
+checks on every file, and to fix what ruff can fix:
+
+```
+pre-commit run --all-files
+ruff format
+ruff check --fix
+```
+
+The hook only reports problems, and never changes files. mypy checks only annotated functions for
+now.
+
+Changes reach `main` through pull requests. GitHub Actions runs the tests (the `test` check) and the
+same lint, format and type checks as the pre-commit hook (the `quality` check) on each pull request
+and on each push to `main`, without network access to external document sources. A pull request
+can't merge until both pass, so skipping the hook doesn't get unchecked code onto `main`.
 
 Each change is reviewed, then archived on its branch, then merged, so that the code, spec and
 archive land as one commit. The `archive-check` check enforces this by failing while a pull request
