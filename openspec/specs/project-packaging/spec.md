@@ -57,15 +57,17 @@ the project, for example `python -m rfc_qa.query`.
 - **WHEN** `python -m rfc_qa.ingestion.ingest` is run from the repository root without the project installed
 - **THEN** it behaves the same as `rfc-ingest`
 
-### Requirement: Resolve data from the repository root
+### Requirement: Keep generated data in one data directory
 
-The default data directory and index path SHALL resolve from the repository root, whatever the
-working directory. Relative paths given in configuration SHALL also resolve from the repository root,
-whichever configuration directory is in use.
+Downloaded RFCs and the index SHALL live in one data directory: the RFCs in its `rfcs/` folder and
+the index in its `index.db` file. Every command SHALL find the index there, so the index a query reads
+is the one ingestion built in the same data directory. By default the data directory is `data/` at the
+repository root, whatever the working directory. The query configuration SHALL NOT give the index
+location.
 
 #### Scenario: Command run from another directory
 
-- **WHEN** `rfc-query` is run from a directory other than the repository root
+- **WHEN** `rfc-query` is run from a directory other than the repository root, with no override
 - **THEN** it reads the index from `data/` at the repository root
 
 #### Scenario: Ingestion defaults
@@ -75,8 +77,18 @@ whichever configuration directory is in use.
 
 #### Scenario: Relative index path with another configuration directory
 
-- **WHEN** the configuration directory is outside the repository and its query configuration gives a relative `index_path`
-- **THEN** the index path resolves from the repository root, not from the configuration directory
+- **WHEN** the configuration directory is outside the repository
+- **THEN** the query reads the index from the selected data directory, not from a path relative to the configuration directory or the repository root
+
+#### Scenario: Build and query agree
+
+- **WHEN** `rfc-ingest` builds an index in a data directory, and `rfc-query` and `rfc-search` are run with the same data directory
+- **THEN** both read the index that `rfc-ingest` built
+
+#### Scenario: Data directory that doesn't exist
+
+- **WHEN** the selected data directory doesn't exist
+- **THEN** `rfc-ingest` creates it, and `rfc-query` and `rfc-search` report a missing index that names the index path and tells the user to run `rfc-ingest`
 
 ### Requirement: Name the ingestion command in guidance
 
@@ -162,3 +174,45 @@ variable or the default.
 
 - **WHEN** a query runs with a configuration directory that doesn't exist
 - **THEN** the response is a failure with the configuration error code, naming the directory and where it was set
+
+### Requirement: Select the data directory
+
+The data directory SHALL be chosen in this order: the `--data-dir` flag of `rfc-ingest`, `rfc-query`
+or `rfc-search`, then the `RFC_QA_DATA_DIR` environment variable, then the default. A relative
+directory given by the flag or the variable SHALL resolve from the working directory. An empty variable
+SHALL count as unset.
+
+#### Scenario: Environment variable
+
+- **WHEN** `RFC_QA_DATA_DIR` names a directory and no flag is given
+- **THEN** each command uses that directory for the RFCs and the index
+
+#### Scenario: Flag over environment variable
+
+- **WHEN** both `--data-dir` and `RFC_QA_DATA_DIR` are given, naming different directories
+- **THEN** the command uses the directory the flag names
+
+#### Scenario: Relative directory
+
+- **WHEN** `--data-dir scratch` is given in a working directory that contains `scratch/`
+- **THEN** the command uses that `scratch/` directory
+
+#### Scenario: Empty variable
+
+- **WHEN** `RFC_QA_DATA_DIR` is set to an empty string and no flag is given
+- **THEN** the command uses the default data directory
+
+#### Scenario: Programmatic query
+
+- **WHEN** the programmatic query entry point is called with a data directory
+- **THEN** it reads the index from that directory, ahead of `RFC_QA_DATA_DIR` and the default
+
+### Requirement: Override the index file for search
+
+`rfc-search` SHALL accept an `--index` flag naming a single index file. It SHALL take precedence over
+the data directory.
+
+#### Scenario: Index flag with a data directory
+
+- **WHEN** `rfc-search` is run with `--index` naming a file and `RFC_QA_DATA_DIR` naming a directory
+- **THEN** it searches the file `--index` names

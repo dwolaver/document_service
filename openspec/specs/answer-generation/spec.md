@@ -88,10 +88,10 @@ reader can find the cited text.
 ### Requirement: Configure the model and retrieval
 
 The service SHALL read the model name, Ollama address, context window size, request timeout, answer
-length limit, retrieval limit and index path from a version-controlled configuration. When the
-`OLLAMA_BASE_URL` environment variable is set and not empty, its value SHALL replace the Ollama
-address from the configuration. It SHALL fail before calling the model when a value is missing or
-invalid.
+length limit and retrieval limit from a version-controlled configuration. The index location SHALL
+come from the data directory, not from this configuration. When the `OLLAMA_BASE_URL` environment
+variable is set and not empty, its value SHALL replace the Ollama address from the configuration. It
+SHALL fail before calling the model when a value is missing or invalid.
 
 #### Scenario: Different model
 

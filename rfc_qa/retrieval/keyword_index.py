@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from rfc_qa import paths
 from rfc_qa.chunk import Chunk
 
-DEFAULT_INDEX_PATH = paths.INDEX_PATH
 DEFAULT_LIMIT = 5
 
 # BM25 weight of a match in each FTS column, so section titles count more than body text.
@@ -174,11 +173,22 @@ def main(argv=None):
     """Console entry point: print matching chunks and return an exit code."""
     parser = argparse.ArgumentParser(description="Search the RFC keyword index.")
     parser.add_argument("query", help="The search text.")
-    parser.add_argument("--index", default=DEFAULT_INDEX_PATH, help="Path to the index file.")
+    parser.add_argument(
+        "--data-dir",
+        help="Directory holding {i}. Defaults to ${e}, then data/ at the repository root.".format(
+            i=paths.INDEX_FILE, e=paths.DATA_DIR_ENV
+        ),
+    )
+    parser.add_argument(
+        "--index", help="Path to the index file, instead of the one in the data directory."
+    )
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="Maximum results.")
     args = parser.parse_args(argv)
 
-    results = search(args.index, args.query, args.limit)
+    index_path = args.index
+    if index_path is None:
+        index_path = paths.resolve_data_dir(args.data_dir).file(paths.INDEX_FILE)
+    results = search(index_path, args.query, args.limit)
     if results is None:
         return 1
     for result in results:

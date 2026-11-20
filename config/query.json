@@ -1,5 +1,4 @@
 {
-  "index_path": "data/index.db",
   "retrieval": { "limit": 5 },
   "llm": {
     "model": "llama3.2",
