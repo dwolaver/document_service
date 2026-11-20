@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import tempfile
+from collections.abc import Mapping
 
 import requests
 
@@ -20,16 +21,16 @@ _REQUEST_HEADERS = {"Accept-Encoding": "identity"}
 _HEADER_SCAN_BYTES = 4096
 
 
-def _log_error(message):
+def _log_error(message: str) -> None:
     print(message, file=sys.stderr)
 
 
-def _is_valid_rfc_number(rfc_number):
+def _is_valid_rfc_number(rfc_number: object) -> bool:
     # bool is a subclass of int but is not a valid RFC number.
     return isinstance(rfc_number, int) and not isinstance(rfc_number, bool) and rfc_number > 0
 
 
-def _header_identifies_rfc(content, rfc_number):
+def _header_identifies_rfc(content: bytes, rfc_number: int) -> bool:
     head = content[:_HEADER_SCAN_BYTES].decode("utf-8", errors="replace").lstrip("\ufeff")
     patterns = (
         r"Request for Comments:\s*{n}\b".format(n=rfc_number),
@@ -38,7 +39,7 @@ def _header_identifies_rfc(content, rfc_number):
     return any(re.search(pattern, head) for pattern in patterns)
 
 
-def _verify(content, headers, rfc_number):
+def _verify(content: bytes, headers: Mapping[str, str], rfc_number: int) -> bool:
     if not content:
         _log_error("RFC {n}: empty response body.".format(n=rfc_number))
         return False
@@ -46,7 +47,7 @@ def _verify(content, headers, rfc_number):
     declared_length = headers.get("Content-Length")
     if declared_length is not None:
         try:
-            expected = int(declared_length)
+            expected: int | None = int(declared_length)
         except TypeError, ValueError:
             expected = None
         if expected is not None and expected != len(content):
@@ -64,7 +65,7 @@ def _verify(content, headers, rfc_number):
     return True
 
 
-def _atomic_write(content, directory, dest_path, rfc_number):
+def _atomic_write(content: bytes, directory: str, dest_path: str, rfc_number: int) -> bool:
     tmp_fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".rfc{n}.".format(n=rfc_number), suffix=".tmp")
     try:
         with os.fdopen(tmp_fd, "wb") as tmp_file:
@@ -82,7 +83,7 @@ def _atomic_write(content, directory, dest_path, rfc_number):
         return False
 
 
-def download_rfc(rfc_number, directory):
+def download_rfc(rfc_number: int, directory: str) -> bool:
     """Download RFC ``rfc_number`` into ``directory`` as ``rfc<number>.txt``.
 
     Returns ``True`` on success (including when the file already exists) and

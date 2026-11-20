@@ -1,8 +1,8 @@
 import os
 
 import pytest
+import requests
 
-from rfc_qa.ingestion import rfc_downloader
 from rfc_qa.ingestion.rfc_downloader import download_rfc
 
 
@@ -33,7 +33,7 @@ def _patch_get(monkeypatch, response=None, exc=None):
             raise exc
         return response
 
-    monkeypatch.setattr(rfc_downloader.requests, "get", fake_get)
+    monkeypatch.setattr(requests, "get", fake_get)
     return calls
 
 
@@ -41,7 +41,7 @@ def _fail_if_called(monkeypatch):
     def fake_get(url, **kwargs):
         raise AssertionError("network call should not happen")
 
-    monkeypatch.setattr(rfc_downloader.requests, "get", fake_get)
+    monkeypatch.setattr(requests, "get", fake_get)
 
 
 # --- Input validation (task 2.1) ---
@@ -50,7 +50,8 @@ def _fail_if_called(monkeypatch):
 def test_rejects_non_integer_and_out_of_range(monkeypatch, tmp_path):
     _fail_if_called(monkeypatch)
     for bad in ["791", None, 0, -5, True, 9110.0]:
-        assert download_rfc(bad, str(tmp_path)) is False
+        # A wrong type is the point: download_rfc() must reject it at runtime.
+        assert download_rfc(bad, str(tmp_path)) is False  # type: ignore[arg-type]
 
 
 def test_accepts_valid_integer(monkeypatch, tmp_path):
@@ -83,7 +84,7 @@ def test_skips_download_when_file_exists(monkeypatch, tmp_path):
 
 
 def test_network_error_returns_false(monkeypatch, tmp_path):
-    _patch_get(monkeypatch, exc=rfc_downloader.requests.RequestException("boom"))
+    _patch_get(monkeypatch, exc=requests.RequestException("boom"))
     assert download_rfc(9110, str(tmp_path)) is False
     assert not (tmp_path / "rfc9110.txt").exists()
 
@@ -150,7 +151,7 @@ def test_no_temp_left_after_write_failure(monkeypatch, tmp_path):
     def boom(src, dst):
         raise OSError("replace failed")
 
-    monkeypatch.setattr(rfc_downloader.os, "replace", boom)
+    monkeypatch.setattr(os, "replace", boom)
     assert download_rfc(9110, str(tmp_path)) is False
     assert not (tmp_path / "rfc9110.txt").exists()
     assert [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp")] == []

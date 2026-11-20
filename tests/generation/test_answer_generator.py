@@ -227,6 +227,27 @@ def test_response_that_is_not_json_is_rejected(model):
         generate_answer("q", CHUNKS, SETTINGS)
 
 
+@pytest.mark.parametrize("body", [[], ["message"], "text", 3])
+def test_response_that_is_not_a_json_object_is_rejected(model, body):
+    model.response = FakeResponse(200, body)
+    with pytest.raises(ModelResponseError, match="isn't a JSON object"):
+        generate_answer("q", CHUNKS, SETTINGS)
+
+
+def test_error_body_that_is_not_an_object_is_reported(model):
+    model.response = FakeResponse(500, ["oops"])
+    with pytest.raises(ModelUnavailableError, match=r"^Ollama returned HTTP 500: $"):
+        generate_answer("q", CHUNKS, SETTINGS)
+
+
+@pytest.mark.parametrize("load_duration", ["2000000", 2.5e6, True, None])
+def test_load_duration_that_is_not_an_integer_is_missing(model, load_duration):
+    model.response = FakeResponse(
+        200, _ollama({"found": True, "answer": "Gone.", "citations": ["P1"]}, load_duration=load_duration)
+    )
+    assert generate_answer("q", CHUNKS, SETTINGS).model_load_ms is None
+
+
 @pytest.mark.parametrize("count", [8192, 9000])
 def test_prompt_reaching_the_context_window_is_rejected(model, count):
     with pytest.raises(ModelResponseError, match="cut short"):

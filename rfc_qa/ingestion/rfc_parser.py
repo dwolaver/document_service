@@ -84,7 +84,11 @@ class _Heading:
     title: str
 
 
-def _remove_header(lines):
+# A heading's number (``None`` when unnumbered), its title, and the body lines under it.
+_Block = tuple[str | None, str, list[str]]
+
+
+def _remove_header(lines: list[str]) -> list[str]:
     if not lines:
         return lines
     if _RUNNING_HEADER.match(lines[0]):
@@ -98,7 +102,7 @@ def _remove_header(lines):
     return lines
 
 
-def _strip_blank_edges(lines):
+def _strip_blank_edges(lines: list[str]) -> list[str]:
     start, end = 0, len(lines)
     while start < end and not lines[start].strip():
         start += 1
@@ -107,7 +111,7 @@ def _strip_blank_edges(lines):
     return lines[start:end]
 
 
-def _clean_page(page):
+def _clean_page(page: str) -> list[str]:
     lines = _strip_blank_edges(page.split("\n"))
     lines = _strip_blank_edges(_remove_header(lines))
     if lines and _FOOTER.search(lines[-1]):
@@ -115,18 +119,18 @@ def _clean_page(page):
     return lines
 
 
-def remove_page_furniture(text):
+def remove_page_furniture(text: str) -> str:
     """Remove page headers, footers and form feeds, joining text across page breaks."""
     text = text.replace("\r\n", "\n")
     if "\f" not in text:
         return text
-    lines = []
+    lines: list[str] = []
     for page in text.split("\f"):
         lines.extend(_clean_page(page))
     return "\n".join(lines)
 
 
-def _sort_key(number):
+def _sort_key(number: str) -> tuple[int, ...]:
     """Return an ordering key where appendices sort after numbered sections."""
     parts = number.split(".")
     if parts[0].isdigit():
@@ -134,11 +138,11 @@ def _sort_key(number):
     return (1, ord(parts[0]) - ord("A"), *(int(part) for part in parts[1:]))
 
 
-def _heading_number(match):
+def _heading_number(match: re.Match[str]) -> str:
     return match["appendix"] or match["letter"] or match["lettered"] or match["number"]
 
 
-def _match_heading_shape(line):
+def _match_heading_shape(line: str) -> tuple[str, str, int] | None:
     """Return (number, title, indent) for a line shaped like a heading, otherwise ``None``."""
     if _DOTTED_LEADER.search(line):
         return None
@@ -148,7 +152,7 @@ def _match_heading_shape(line):
     return _heading_number(match), match["title"], len(match["indent"])
 
 
-def _is_plausible_title(title, number, indent):
+def _is_plausible_title(title: str, number: str, indent: int) -> bool:
     if len(title) > _MAX_TITLE_LENGTH or title.endswith((";", ":")):
         return False
     # A few RFCs end margin headings with a period, and RFC 1122 wraps deep headings after a comma.
@@ -163,7 +167,7 @@ def _is_plausible_title(title, number, indent):
     return title[0].isupper() or title[0].isdigit()
 
 
-def _is_expected_indent(number, title, indent, indents_subsections):
+def _is_expected_indent(number: str, title: str, indent: int, indents_subsections: bool) -> bool:
     if indent == 0:
         return True
     depth = number.count(".") + 1
@@ -173,7 +177,7 @@ def _is_expected_indent(number, title, indent, indents_subsections):
     return indent >= _MIN_CENTERED_INDENT and title.isupper()
 
 
-def _follows(number, previous):
+def _follows(number: str, previous: str | None) -> bool:
     """Return whether ``number`` can come next after ``previous`` in section order."""
     key = _sort_key(number)
     if previous is None:
@@ -186,7 +190,7 @@ def _follows(number, previous):
     return key[1] - previous_key[1] <= _MAX_TOP_LEVEL_STEP
 
 
-def _parse_heading(line, previous, indents_subsections):
+def _parse_heading(line: str, previous: str | None, indents_subsections: bool) -> _Heading | None:
     shape = _match_heading_shape(line)
     if shape is None:
         return None
@@ -202,7 +206,7 @@ def _parse_heading(line, previous, indents_subsections):
     return _Heading(number, title.rstrip(" .,"))
 
 
-def _indents_subsections(lines):
+def _indents_subsections(lines: list[str]) -> bool:
     """Return whether this RFC indents subsection headings by depth, as some older RFCs do.
 
     Layout is consistent within a document, so an RFC with subsection headings at the margin never
@@ -211,7 +215,7 @@ def _indents_subsections(lines):
     return not any(_MARGIN_SUBSECTION.match(line) for line in lines)
 
 
-def _body_start_after_toc(lines, toc_index, indents_subsections):
+def _body_start_after_toc(lines: list[str], toc_index: int, indents_subsections: bool) -> int:
     """Return the line index where numbered content resumes after a table of contents.
 
     The first entry's number appears once in the table, so its next appearance as a heading is the
@@ -229,7 +233,7 @@ def _body_start_after_toc(lines, toc_index, indents_subsections):
     return toc_index + 1
 
 
-def _unnumbered_title(line):
+def _unnumbered_title(line: str) -> str | None:
     title = line.strip().rstrip(":")
     is_centered_or_marginal = line == line.lstrip() or len(line) - len(line.lstrip()) >= _MIN_CENTERED_INDENT
     if not title or not is_centered_or_marginal:
@@ -239,12 +243,12 @@ def _unnumbered_title(line):
     return None
 
 
-def _split_blocks(lines):
+def _split_blocks(lines: list[str]) -> list[_Block]:
     """Yield (number, title, body lines) for each block. ``number`` is ``None`` when unnumbered."""
     indents_subsections = _indents_subsections(lines)
-    blocks = []
-    current = None
-    previous_number = None
+    blocks: list[_Block] = []
+    current: _Block | None = None
+    previous_number: str | None = None
     index = 0
     while index < len(lines):
         line = lines[index]
@@ -267,13 +271,13 @@ def _split_blocks(lines):
     return blocks
 
 
-def _is_descendant(number, ancestor):
+def _is_descendant(number: str, ancestor: str) -> bool:
     return number.startswith(ancestor + ".")
 
 
-def _sections_from_blocks(blocks):
-    sections = []
-    excluded_ancestor = None
+def _sections_from_blocks(blocks: list[_Block]) -> list[Section]:
+    sections: list[Section] = []
+    excluded_ancestor: str | None = None
     for number, title, body in blocks:
         text = "\n".join(_strip_blank_edges(body))
         if number is None:
@@ -290,7 +294,7 @@ def _sections_from_blocks(blocks):
     return sections
 
 
-def parse_rfc(text):
+def parse_rfc(text: str) -> list[Section]:
     """Return the retained sections of an RFC, in document order.
 
     Front matter before the first recognized heading and excluded sections are dropped. A section

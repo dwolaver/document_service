@@ -164,6 +164,7 @@ def test_missing_config_dir_is_a_config_error(tmp_path, monkeypatch, use_env, so
     else:
         response = run_query("What does 404 mean?", config_dir=missing)
     assert (response.success, response.error_code) == (False, QueryErrorCode.CONFIG_INVALID)
+    assert response.error_string is not None
     assert missing in response.error_string
     assert source in response.error_string
 
@@ -219,6 +220,7 @@ def test_invalid_config_names_the_value(tmp_path, monkeypatch, changes, name):
     _write_config(tmp_path, _with(**changes), monkeypatch)
     response = run_query("What does 404 mean?")
     assert (response.success, response.error_code) == (False, QueryErrorCode.CONFIG_INVALID)
+    assert response.error_string is not None
     assert name in response.error_string
 
 
@@ -241,6 +243,7 @@ def test_ollama_base_url_does_not_replace_a_missing_configured_address(tmp_path,
     _write_config(tmp_path, _with(llm__base_url=_MISSING), monkeypatch)
     response = run_query("What does 404 mean?")
     assert (response.success, response.error_code) == (False, QueryErrorCode.CONFIG_INVALID)
+    assert response.error_string is not None
     assert "llm.base_url" in response.error_string
 
 
@@ -284,7 +287,8 @@ def test_timings_defaults():
 
 def test_invalid_queries_rejected(setup):
     for bad in [None, 123, "", "   ", "\t\n"]:
-        response = run_query(bad)
+        # A wrong type is the point: query() must reject it at runtime.
+        response = run_query(bad)  # type: ignore[arg-type]
         assert (response.success, response.error_code) == (False, QueryErrorCode.INVALID_QUERY)
         assert response.error_string
         assert (response.answer, response.timings) == (None, None)
@@ -332,6 +336,7 @@ def test_missing_index(tmp_path, monkeypatch, setup):
     monkeypatch.setenv(paths.DATA_DIR_ENV, str(missing))
     response = run_query("What does a 404 status code mean?")
     assert (response.success, response.error_code) == (False, QueryErrorCode.INDEX_UNAVAILABLE)
+    assert response.error_string is not None
     assert str(missing / "index.db") in response.error_string
     assert "rfc-ingest" in response.error_string
     assert not missing.exists()
@@ -347,6 +352,7 @@ def test_budget_that_does_not_fit_fails_before_the_model(tmp_path, monkeypatch, 
     _write_config(tmp_path, _with(llm__num_ctx=4096), monkeypatch)
     response = run_query("What does a 404 status code mean?")
     assert (response.success, response.error_code) == (False, QueryErrorCode.CONFIG_INVALID)
+    assert response.error_string is not None
     assert "4324 tokens" in response.error_string
     assert setup.calls == []
 
@@ -370,11 +376,27 @@ def test_model_failures(setup, error, code):
     assert response.error_string == str(error)
 
 
+def test_model_body_that_is_not_a_json_object_is_an_invalid_response(tmp_path, monkeypatch, data_dir):
+    class ListResponse:
+        status_code = 200
+
+        def json(self):
+            return ["not", "an", "object"]
+
+    monkeypatch.setattr(answer_generator, "_post_chat", lambda url, body, timeout: ListResponse())
+    _write_config(tmp_path, CONFIG, monkeypatch)
+    response = run_query("What does a 404 status code mean?")
+    assert (response.success, response.error_code) == (False, QueryErrorCode.MODEL_INVALID_RESPONSE)
+    assert response.error_string is not None
+    assert "isn't a JSON object" in response.error_string
+
+
 # --- Timings (task 3.2) ---
 
 
 def test_warm_call_timings(setup):
     timings = run_query("What does a 404 status code mean?").timings
+    assert timings is not None and timings.retrieval_ms is not None
     assert timings.total_ms >= timings.retrieval_ms >= 0
     assert (timings.model_load_ms, timings.generation_ms) == (2, 48)
     assert (timings.prompt_tokens, timings.answer_tokens) == (1200, 49)
@@ -386,11 +408,14 @@ def test_cold_start_threshold(setup, load_ms, cold):
     setup.result = answer_generator.GenerationResult(
         found=True, answer="a", cited=[CHUNKS[0]], model_load_ms=load_ms
     )
-    assert run_query("What does a 404 status code mean?").timings.cold_start is cold
+    timings = run_query("What does a 404 status code mean?").timings
+    assert timings is not None
+    assert timings.cold_start is cold
 
 
 def test_no_model_call_timings(setup):
     timings = run_query("zzzzqqqq").timings
+    assert timings is not None
     assert timings.retrieval_ms is not None
     assert (timings.model_load_ms, timings.generation_ms, timings.prompt_tokens, timings.answer_tokens) == (
         None,
@@ -401,6 +426,7 @@ def test_no_model_call_timings(setup):
 def test_model_failure_still_reports_timings(setup):
     setup.error = ModelUnavailableError("timed out")
     timings = run_query("What does a 404 status code mean?").timings
+    assert timings is not None
     assert timings.retrieval_ms is not None and timings.total_ms >= timings.retrieval_ms
     assert timings.model_load_ms is None
 
@@ -504,4 +530,5 @@ def test_real_model_answers_a_corpus_question():
     assert response.success is True, response.error_string
     assert response.found is True
     assert {c.rfc_number for c in response.citations} & {9110, 7231, 2616}
+    assert response.timings is not None and response.timings.prompt_tokens is not None
     assert response.timings.prompt_tokens > 0

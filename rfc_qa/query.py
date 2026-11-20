@@ -10,13 +10,16 @@ import json
 import os
 import sys
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import List, Optional
+from typing import Any
 
 from rfc_qa import paths
+from rfc_qa.chunk import Chunk
 from rfc_qa.generation.answer_generator import (
     NOT_FOUND_ANSWER,
+    GenerationResult,
     ModelResponseError,
     ModelSettings,
     ModelUnavailableError,
@@ -63,11 +66,11 @@ class Timings:
     """Where a query's time went. Model fields are ``None`` when the model wasn't called."""
 
     total_ms: int
-    retrieval_ms: Optional[int] = None
-    model_load_ms: Optional[int] = None
-    generation_ms: Optional[int] = None
-    prompt_tokens: Optional[int] = None
-    answer_tokens: Optional[int] = None
+    retrieval_ms: int | None = None
+    model_load_ms: int | None = None
+    generation_ms: int | None = None
+    prompt_tokens: int | None = None
+    answer_tokens: int | None = None
     cold_start: bool = False
 
 
@@ -80,12 +83,12 @@ class QueryResponse:
     """
 
     success: bool
-    answer: Optional[str] = None
-    found: Optional[bool] = None
-    citations: List[Citation] = field(default_factory=list)
-    timings: Optional[Timings] = None
-    error_string: Optional[str] = None
-    error_code: Optional[QueryErrorCode] = None
+    answer: str | None = None
+    found: bool | None = None
+    citations: list[Citation] = field(default_factory=list)
+    timings: Timings | None = None
+    error_string: str | None = None
+    error_code: QueryErrorCode | None = None
 
 
 class QueryConfigError(Exception):
@@ -98,41 +101,41 @@ class QueryConfig:
     model: ModelSettings
 
 
-def _log_error(message):
+def _log_error(message: object) -> None:
     print(message, file=sys.stderr)
 
 
-def _is_valid_query(user_query):
+def _is_valid_query(user_query: object) -> bool:
     return isinstance(user_query, str) and bool(user_query.strip())
 
 
-def _positive_integer(value, name):
+def _positive_integer(value: object, name: str) -> int:
     # bool is a subclass of int but is not a valid value here.
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise QueryConfigError("Config {n} must be a positive integer, got {v!r}.".format(n=name, v=value))
     return value
 
 
-def _positive_number(value, name):
+def _positive_number(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
         raise QueryConfigError("Config {n} must be a positive number, got {v!r}.".format(n=name, v=value))
     return value
 
 
-def _non_empty_string(value, name):
+def _non_empty_string(value: object, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise QueryConfigError("Config {n} must be a non-empty string, got {v!r}.".format(n=name, v=value))
     return value
 
 
-def _section(data, name):
+def _section(data: dict[str, Any], name: str) -> dict[str, Any]:
     section = data.get(name)
     if not isinstance(section, dict):
         raise QueryConfigError("Config {n} must be an object, got {v!r}.".format(n=name, v=section))
     return section
 
 
-def load_query_config(path):
+def load_query_config(path: str) -> QueryConfig:
     """Return the validated configuration, raising :class:`QueryConfigError` if it's invalid.
 
     ``OLLAMA_BASE_URL``, when set and not empty, replaces ``llm.base_url``. The file must still give
@@ -162,18 +165,18 @@ def load_query_config(path):
     )
 
 
-def _elapsed_ms(start):
+def _elapsed_ms(start: float) -> int:
     return int(round((time.perf_counter() - start) * 1000))
 
 
 class _Clock:
     """Wall-clock timings for one query, combined with the model's own durations."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.start = time.perf_counter()
-        self.retrieval_ms = None
+        self.retrieval_ms: int | None = None
 
-    def timings(self, generation=None):
+    def timings(self, generation: GenerationResult | None = None) -> Timings:
         if generation is None:
             return Timings(_elapsed_ms(self.start), self.retrieval_ms)
         load_ms = generation.model_load_ms
@@ -188,24 +191,26 @@ class _Clock:
         )
 
 
-def _failure(code, message, timings=None):
+def _failure(code: QueryErrorCode, message: str, timings: Timings | None = None) -> QueryResponse:
     return QueryResponse(success=False, error_code=code, error_string=message, timings=timings)
 
 
-def _not_found(timings):
+def _not_found(timings: Timings) -> QueryResponse:
     return QueryResponse(success=True, answer=NOT_FOUND_ANSWER, found=False, timings=timings)
 
 
-def _chunk_token_target(index_path):
+def _chunk_token_target(index_path: str) -> int | None:
     """Return the index's chunk token target, or ``None`` if the index can't provide it."""
     metadata = read_metadata(index_path)
+    if metadata is None:
+        return None
     try:
         return int(metadata["target_chunk_tokens"])
-    except TypeError, KeyError, ValueError:
+    except KeyError, ValueError:
         return None
 
 
-def _budget_error(config, chunk_tokens):
+def _budget_error(config: QueryConfig, chunk_tokens: int) -> str | None:
     needed = config.retrieval_limit * chunk_tokens + PROMPT_ALLOWANCE_TOKENS + config.model.max_answer_tokens
     if needed <= config.model.num_ctx:
         return None
@@ -222,13 +227,13 @@ def _budget_error(config, chunk_tokens):
     )
 
 
-def _citation(chunk):
+def _citation(chunk: Chunk) -> Citation:
     return Citation(
         chunk.chunk_id, chunk.rfc_number, chunk.rfc_title, chunk.section_number, chunk.section_title
     )
 
 
-def _answer(user_query, config, index_path):
+def _answer(user_query: str, config: QueryConfig, index_path: str) -> QueryResponse:
     clock = _Clock()
 
     chunk_tokens = _chunk_token_target(index_path)
@@ -274,7 +279,7 @@ def _answer(user_query, config, index_path):
     )
 
 
-def query(user_query, *, config_dir=None, data_dir=None):
+def query(user_query: str, *, config_dir: str | None = None, data_dir: str | None = None) -> QueryResponse:
     """Answer a natural-language query about RFCs.
 
     The query configuration is read from ``config_dir`` if given, then from the directory named by
@@ -300,7 +305,7 @@ def query(user_query, *, config_dir=None, data_dir=None):
     return _answer(user_query, config, index_path)
 
 
-def _print_success(response):
+def _print_success(response: QueryResponse) -> None:
     print(response.answer)
     if response.citations:
         print()
@@ -315,7 +320,7 @@ def _print_success(response):
                 )
             )
     timings = response.timings
-    if timings is not None and timings.cold_start:
+    if timings is not None and timings.cold_start and timings.model_load_ms is not None:
         print()
         print(
             "Note: the model was loaded for this query, which took {s:.1f} seconds.".format(
@@ -324,7 +329,7 @@ def _print_success(response):
         )
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     """Console entry point: print the answer or error and return an exit code."""
     parser = argparse.ArgumentParser(description="Ask a question about RFCs.")
     parser.add_argument("query", help="The natural-language query to answer.")

@@ -138,8 +138,11 @@ ruff format
 ruff check --fix
 ```
 
-The hook only reports problems, and never changes files. mypy checks only annotated functions for
-now.
+The hook only reports problems, and never changes files. mypy runs in strict mode for the `rfc_qa`
+package and `scripts/`, so every function there needs complete annotations. Tests don't need
+annotations, but mypy still checks the bodies of test functions, including `None` handling. A
+`# type: ignore` has to name the error it suppresses, such as `# type: ignore[arg-type]`, and mypy
+reports one that isn't needed.
 
 pre-commit builds gitleaks from the version pinned in `.pre-commit-config.yaml` the first time the hook
 runs, which takes a few seconds and needs network access once. Nothing else needs installing. A
