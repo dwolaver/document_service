@@ -57,9 +57,9 @@ mistake survive.
 Read what you need to describe the system accurately:
 
 - The `rfc_qa` package and its subpackages, and `scripts/`.
-- Configuration and data definitions: `pyproject.toml`, which defines the commands, `corpus.json`,
-  `ingest_config.json`, `query_config.json`, `requirements.txt`, `requirements-dev.txt` and
-  `pytest.ini`.
+- Configuration and data definitions: `pyproject.toml`, which defines the commands,
+  `config/corpus.json`, `config/ingest.json`, `config/query.json`, `requirements.txt`,
+  `requirements-dev.txt` and `pytest.ini`.
 - `.github/workflows/`, for how changes are checked.
 - `README.md`, only to see which roadmap steps are planned, so that you don't describe them.
 - `openspec/changes/archive/*/design.md`, only for the reasons behind key decisions. When a design
