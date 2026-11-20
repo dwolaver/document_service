@@ -56,7 +56,7 @@ mistake survive.
 
 Read what you need to describe the system accurately:
 
-- The `rfc_qa` package and its subpackages, and `scripts/`.
+- The `rfc_qa` package in `src/rfc_qa/` and its subpackages, and `scripts/`.
 - Configuration and data definitions: `pyproject.toml`, which defines the commands,
   `config/corpus.json`, `config/ingest.json`, `config/query.json`, `requirements.txt`,
   `requirements-dev.txt` and `pytest.ini`.
