@@ -78,6 +78,7 @@ def test_config_dir_error_is_a_value_error():
 
 # --- Data directory ---
 
+
 def test_data_default_is_data_at_the_repository_root():
     assert paths.DEFAULT_DATA_DIR == os.path.join(paths.REPO_ROOT, "data")
     assert resolve_data_dir() == SelectedDir(paths.DEFAULT_DATA_DIR, "default")

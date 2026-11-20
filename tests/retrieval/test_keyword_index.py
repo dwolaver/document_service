@@ -12,8 +12,13 @@ METADATA = {"embedding_model_name": "nomic-embed-text", "max_chunk_chars": 2970}
 
 def _chunk(number, section, title, text):
     return Chunk(
-        "rfc{n}-s{s}-p0".format(n=number, s=section), number, "RFC {n}".format(n=number), "tcp",
-        section, title, text,
+        "rfc{n}-s{s}-p0".format(n=number, s=section),
+        number,
+        "RFC {n}".format(n=number),
+        "tcp",
+        section,
+        title,
+        text,
     )
 
 
@@ -37,6 +42,7 @@ def _ids(results):
 
 
 # --- Building (task 4.1) ---
+
 
 def test_build_writes_a_complete_index(index_path):
     assert len(search(index_path, "handshake", 10)) == 2
@@ -70,6 +76,7 @@ def test_build_in_missing_directory_reports_a_failure(tmp_path, capsys):
 
 
 # --- Searching (task 4.2) ---
+
 
 def test_exact_term_returns_its_chunk_first(index_path):
     assert _ids(search(index_path, "ECONNRESET"))[0] == "rfc9110-s1-p0"
@@ -107,8 +114,21 @@ def test_zero_limit_returns_nothing(index_path):
 
 @pytest.mark.parametrize(
     "query",
-    ['Content-Length', '"HTTP/2', 'handshake"', "a AND", "NOT", "(unbalanced", "col:umn", "*", "^x",
-     "NEAR(a b)", "it's", "--", "chunks_fts"],
+    [
+        "Content-Length",
+        '"HTTP/2',
+        'handshake"',
+        "a AND",
+        "NOT",
+        "(unbalanced",
+        "col:umn",
+        "*",
+        "^x",
+        "NEAR(a b)",
+        "it's",
+        "--",
+        "chunks_fts",
+    ],
 )
 def test_query_text_is_never_read_as_syntax(index_path, query):
     assert isinstance(search(index_path, query), list)
@@ -148,6 +168,7 @@ def test_corrupt_index_reports_a_diagnostic(tmp_path, capsys):
 
 
 # --- Console search (task 4.3) ---
+
 
 def test_cli_prints_results(index_path, capsys):
     assert main(["ECONNRESET", "--index", index_path]) == 0

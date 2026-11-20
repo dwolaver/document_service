@@ -36,7 +36,10 @@ class FakeResponse:
 
 def _ollama(output, **extra):
     payload = {
-        "message": {"role": "assistant", "content": output if isinstance(output, str) else json.dumps(output)},
+        "message": {
+            "role": "assistant",
+            "content": output if isinstance(output, str) else json.dumps(output),
+        },
         "load_duration": 2_000_000,
         "prompt_eval_duration": 6_000_000,
         "eval_duration": 42_000_000,
@@ -73,6 +76,7 @@ def _answer_with(model, output, **extra):
 
 # --- Prompt (task 2.1) ---
 
+
 def test_messages_label_passages_in_order_then_ask_the_question():
     system, user = build_messages("What does 404 mean?", CHUNKS)
     assert system["role"] == "system" and "only the passages" in system["content"]
@@ -88,6 +92,7 @@ def test_messages_do_not_show_chunk_ids():
 
 
 # --- Model call (task 2.2) ---
+
 
 def test_request_body(model):
     generate_answer("What does 404 mean?", CHUNKS, SETTINGS)
@@ -145,6 +150,7 @@ def test_module_has_no_way_to_pull_or_start_ollama():
 
 
 # --- Output and citations (task 2.3) ---
+
 
 def test_answer_with_valid_citations(model):
     result = _answer_with(model, {"found": True, "answer": " Gone. ", "citations": ["P1", "P3"]})
@@ -228,20 +234,28 @@ def test_prompt_reaching_the_context_window_is_rejected(model, count):
 
 
 def test_prompt_just_under_the_context_window_is_accepted(model):
-    assert _answer_with(model, {"found": True, "answer": "a", "citations": ["P1"]}, prompt_eval_count=8191).found
+    assert _answer_with(
+        model, {"found": True, "answer": "a", "citations": ["P1"]}, prompt_eval_count=8191
+    ).found
 
 
 def test_durations_and_counts(model):
-    result = _answer_with(model, {"found": True, "answer": "a", "citations": ["P1"]}, load_duration=4_852_400_000)
+    result = _answer_with(
+        model, {"found": True, "answer": "a", "citations": ["P1"]}, load_duration=4_852_400_000
+    )
     assert result.model_load_ms == 4852
     assert result.generation_ms == 48
     assert (result.prompt_tokens, result.answer_tokens) == (1200, 49)
 
 
 def test_missing_durations_are_none(model):
-    model.response = FakeResponse(200, {"message": {"content": json.dumps({"found": False, "answer": "", "citations": []})}})
+    model.response = FakeResponse(
+        200, {"message": {"content": json.dumps({"found": False, "answer": "", "citations": []})}}
+    )
     result = generate_answer("q", CHUNKS, SETTINGS)
-    assert (result.model_load_ms, result.generation_ms, result.prompt_tokens, result.answer_tokens) == (None,) * 4
+    assert (result.model_load_ms, result.generation_ms, result.prompt_tokens, result.answer_tokens) == (
+        None,
+    ) * 4
 
 
 def test_not_found_answer_text():

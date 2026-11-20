@@ -201,7 +201,7 @@ def _chunk_token_target(index_path):
     metadata = read_metadata(index_path)
     try:
         return int(metadata["target_chunk_tokens"])
-    except (TypeError, KeyError, ValueError):
+    except TypeError, KeyError, ValueError:
         return None
 
 
@@ -213,8 +213,12 @@ def _budget_error(config, chunk_tokens):
         "Config doesn't fit the context window: {l} passages x {c} tokens + {p} for the prompt + {a} "
         "for the answer is {n} tokens, more than llm.num_ctx ({x})."
     ).format(
-        l=config.retrieval_limit, c=chunk_tokens, p=PROMPT_ALLOWANCE_TOKENS,
-        a=config.model.max_answer_tokens, n=needed, x=config.model.num_ctx,
+        l=config.retrieval_limit,
+        c=chunk_tokens,
+        p=PROMPT_ALLOWANCE_TOKENS,
+        a=config.model.max_answer_tokens,
+        n=needed,
+        x=config.model.num_ctx,
     )
 
 
@@ -313,9 +317,11 @@ def _print_success(response):
     timings = response.timings
     if timings is not None and timings.cold_start:
         print()
-        print("Note: the model was loaded for this query, which took {s:.1f} seconds.".format(
-            s=timings.model_load_ms / 1000
-        ))
+        print(
+            "Note: the model was loaded for this query, which took {s:.1f} seconds.".format(
+                s=timings.model_load_ms / 1000
+            )
+        )
 
 
 def main(argv=None):

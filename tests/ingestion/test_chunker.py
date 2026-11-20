@@ -8,6 +8,7 @@ def _chunks(sections, max_chars=100):
 
 # --- Splitting (task 3.1) ---
 
+
 def test_section_that_fits_is_one_chunk():
     assert split_text("short text", 100) == ["short text"]
 
@@ -67,6 +68,7 @@ def test_chunks_never_mix_sections():
 
 
 # --- Identity and metadata (task 3.2) ---
+
 
 def test_chunk_metadata():
     chunk = _chunks([Section("15.5.1", "400 Bad Request", "Body.")])[0]

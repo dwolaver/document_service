@@ -48,6 +48,7 @@ def _modified_config(**changes):
 
 # --- Manifest (tasks 1.1 and 1.2) ---
 
+
 def test_valid_manifest(tmp_path):
     entries = _corpus(tmp_path, ENTRIES)
     assert [(e.number, e.family) for e in entries] == [(793, "tcp"), (9110, "http")]
@@ -107,6 +108,7 @@ def test_real_corpus_loads_and_has_the_obsolete_pairs():
 
 
 # --- Configuration (task 1.3) ---
+
 
 def test_max_chunk_size_is_derived(tmp_path):
     config = _config(tmp_path, _modified_config(chars_per_token=3, target_chunk_tokens=1000))
@@ -171,6 +173,7 @@ def test_real_config_loads():
 
 # --- Pipeline (task 5.1) ---
 
+
 def _copy_fixture(name, path):
     with open(os.path.join(FIXTURE_DIR, name + ".txt"), encoding="utf-8") as fixture:
         path.write_text(fixture.read(), encoding="utf-8")
@@ -203,8 +206,14 @@ def _run(workspace):
 
 
 def _main_args(workspace):
-    return ["--corpus", workspace["corpus"], "--config", workspace["config"],
-            "--data-dir", workspace["data_dir"]]
+    return [
+        "--corpus",
+        workspace["corpus"],
+        "--config",
+        workspace["config"],
+        "--data-dir",
+        workspace["data_dir"],
+    ]
 
 
 def test_success_builds_an_index_from_every_rfc(workspace):
@@ -296,9 +305,7 @@ def test_failed_run_keeps_the_earlier_index(workspace, monkeypatch):
 
 
 def test_invalid_config_fails_before_writing_an_index(workspace, tmp_path, capsys):
-    workspace["config"] = _write_json(
-        tmp_path / "config.json", _modified_config(target_chunk_tokens=9999)
-    )
+    workspace["config"] = _write_json(tmp_path / "config.json", _modified_config(target_chunk_tokens=9999))
     assert main(_main_args(workspace)) != 0
     assert "exceeds" in capsys.readouterr().err
     assert workspace["downloads"] == []
@@ -306,6 +313,7 @@ def test_invalid_config_fails_before_writing_an_index(workspace, tmp_path, capsy
 
 
 # --- Configuration directory ---
+
 
 @pytest.fixture
 def ingestion_inputs(monkeypatch):
@@ -327,28 +335,30 @@ def _config_dir(path):
 
 def test_defaults_read_from_the_config_directory(ingestion_inputs, tmp_path):
     assert main(["--data-dir", str(tmp_path)]) == 0
-    assert ingestion_inputs == [(
-        os.path.join(paths.DEFAULT_CONFIG_DIR, "corpus.json"),
-        os.path.join(paths.DEFAULT_CONFIG_DIR, "ingest.json"),
-    )]
+    assert ingestion_inputs == [
+        (
+            os.path.join(paths.DEFAULT_CONFIG_DIR, "corpus.json"),
+            os.path.join(paths.DEFAULT_CONFIG_DIR, "ingest.json"),
+        )
+    ]
 
 
 def test_environment_selects_the_config_directory(ingestion_inputs, tmp_path, monkeypatch):
     directory = _config_dir(tmp_path / "env")
     monkeypatch.setenv(paths.CONFIG_DIR_ENV, directory)
     assert main(["--data-dir", str(tmp_path)]) == 0
-    assert ingestion_inputs == [(
-        os.path.join(directory, "corpus.json"), os.path.join(directory, "ingest.json")
-    )]
+    assert ingestion_inputs == [
+        (os.path.join(directory, "corpus.json"), os.path.join(directory, "ingest.json"))
+    ]
 
 
 def test_flag_selects_the_config_directory_over_the_environment(ingestion_inputs, tmp_path, monkeypatch):
     directory = _config_dir(tmp_path / "flag")
     monkeypatch.setenv(paths.CONFIG_DIR_ENV, _config_dir(tmp_path / "env"))
     assert main(["--config-dir", directory, "--data-dir", str(tmp_path)]) == 0
-    assert ingestion_inputs == [(
-        os.path.join(directory, "corpus.json"), os.path.join(directory, "ingest.json")
-    )]
+    assert ingestion_inputs == [
+        (os.path.join(directory, "corpus.json"), os.path.join(directory, "ingest.json"))
+    ]
 
 
 def test_corpus_flag_with_a_config_directory(ingestion_inputs, tmp_path):
@@ -359,9 +369,7 @@ def test_corpus_flag_with_a_config_directory(ingestion_inputs, tmp_path):
 
 
 @pytest.mark.parametrize("use_env, source", [(False, "--config-dir"), (True, "RFC_QA_CONFIG_DIR")])
-def test_missing_config_directory_fails_before_downloading(
-    workspace, monkeypatch, capsys, use_env, source
-):
+def test_missing_config_directory_fails_before_downloading(workspace, monkeypatch, capsys, use_env, source):
     missing = os.path.join(workspace["data_dir"], "missing")
     args = ["--data-dir", workspace["data_dir"]]
     if use_env:
@@ -382,6 +390,7 @@ def test_missing_config_directory_is_ignored_when_both_files_are_given(workspace
 
 
 # --- Data directory ---
+
 
 @pytest.fixture
 def ingestion_data_dirs(monkeypatch):
@@ -407,9 +416,7 @@ def test_environment_selects_the_data_directory(ingestion_data_dirs, tmp_path, m
     assert ingestion_data_dirs == [str(tmp_path / "env")]
 
 
-def test_flag_selects_the_data_directory_over_the_environment(
-    ingestion_data_dirs, tmp_path, monkeypatch
-):
+def test_flag_selects_the_data_directory_over_the_environment(ingestion_data_dirs, tmp_path, monkeypatch):
     monkeypatch.setenv(paths.DATA_DIR_ENV, str(tmp_path / "env"))
     assert main(["--data-dir", str(tmp_path / "flag")]) == 0
     assert ingestion_data_dirs == [str(tmp_path / "flag")]

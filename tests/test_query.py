@@ -23,10 +23,24 @@ CONFIG = {
     },
 }
 CHUNKS = [
-    Chunk("rfc9110-s15.5.5-p0", 9110, "HTTP Semantics", "http", "15.5.5", "404 Not Found",
-          "The 404 status code indicates the server did not find the resource."),
-    Chunk("rfc9293-s3.5-p0", 9293, "TCP", "tcp", "3.5", "Establishing a Connection",
-          "The three-way handshake establishes a connection."),
+    Chunk(
+        "rfc9110-s15.5.5-p0",
+        9110,
+        "HTTP Semantics",
+        "http",
+        "15.5.5",
+        "404 Not Found",
+        "The 404 status code indicates the server did not find the resource.",
+    ),
+    Chunk(
+        "rfc9293-s3.5-p0",
+        9293,
+        "TCP",
+        "tcp",
+        "3.5",
+        "Establishing a Connection",
+        "The three-way handshake establishes a connection.",
+    ),
 ]
 
 
@@ -77,8 +91,13 @@ def setup(tmp_path, monkeypatch, data_dir):
         calls = []
         error = None
         result = answer_generator.GenerationResult(
-            found=True, answer="Not found means 404.", cited=[CHUNKS[0]],
-            model_load_ms=2, generation_ms=48, prompt_tokens=1200, answer_tokens=49,
+            found=True,
+            answer="Not found means 404.",
+            cited=[CHUNKS[0]],
+            model_load_ms=2,
+            generation_ms=48,
+            prompt_tokens=1200,
+            answer_tokens=49,
         )
 
     def fake_generate(question, chunks, settings):
@@ -94,6 +113,7 @@ def setup(tmp_path, monkeypatch, data_dir):
 
 
 # --- Configuration (task 1.1) ---
+
 
 def test_real_config_loads():
     config = load_query_config(os.path.join(paths.DEFAULT_CONFIG_DIR, "query.json"))
@@ -151,9 +171,7 @@ def test_missing_config_dir_is_a_config_error(tmp_path, monkeypatch, use_env, so
 def _spy_on_index_path(monkeypatch):
     """Record the index path a query is answered from, stopping the query there."""
     used = []
-    monkeypatch.setattr(
-        query, "_answer", lambda user_query, config, index_path: used.append(index_path)
-    )
+    monkeypatch.setattr(query, "_answer", lambda user_query, config, index_path: used.append(index_path))
     return used
 
 
@@ -240,6 +258,7 @@ def test_unreadable_config(tmp_path, monkeypatch):
 
 # --- Response shape (task 1.2) ---
 
+
 def test_response_defaults():
     response = QueryResponse(success=True, answer="hi")
     assert (response.found, response.citations, response.timings) == (None, [], None)
@@ -262,6 +281,7 @@ def test_timings_defaults():
 
 # --- Input validation ---
 
+
 def test_invalid_queries_rejected(setup):
     for bad in [None, 123, "", "   ", "\t\n"]:
         response = run_query(bad)
@@ -272,6 +292,7 @@ def test_invalid_queries_rejected(setup):
 
 
 # --- Pipeline (task 3.1) ---
+
 
 def test_answered_query(setup):
     response = run_query("What does a 404 status code mean?")
@@ -351,6 +372,7 @@ def test_model_failures(setup, error, code):
 
 # --- Timings (task 3.2) ---
 
+
 def test_warm_call_timings(setup):
     timings = run_query("What does a 404 status code mean?").timings
     assert timings.total_ms >= timings.retrieval_ms >= 0
@@ -361,14 +383,18 @@ def test_warm_call_timings(setup):
 
 @pytest.mark.parametrize("load_ms, cold", [(499, False), (500, True), (4852, True)])
 def test_cold_start_threshold(setup, load_ms, cold):
-    setup.result = answer_generator.GenerationResult(found=True, answer="a", cited=[CHUNKS[0]], model_load_ms=load_ms)
+    setup.result = answer_generator.GenerationResult(
+        found=True, answer="a", cited=[CHUNKS[0]], model_load_ms=load_ms
+    )
     assert run_query("What does a 404 status code mean?").timings.cold_start is cold
 
 
 def test_no_model_call_timings(setup):
     timings = run_query("zzzzqqqq").timings
     assert timings.retrieval_ms is not None
-    assert (timings.model_load_ms, timings.generation_ms, timings.prompt_tokens, timings.answer_tokens) == (None,) * 4
+    assert (timings.model_load_ms, timings.generation_ms, timings.prompt_tokens, timings.answer_tokens) == (
+        None,
+    ) * 4
     assert timings.cold_start is False
 
 
@@ -381,6 +407,7 @@ def test_model_failure_still_reports_timings(setup):
 
 # --- Console (task 3.3) ---
 
+
 def test_main_prints_answer_and_citations(setup, capsys):
     assert main(["What does a 404 status code mean?"]) == 0
     captured = capsys.readouterr()
@@ -392,7 +419,9 @@ def test_main_prints_answer_and_citations(setup, capsys):
 
 
 def test_main_prints_a_cold_start_note(setup, capsys):
-    setup.result = answer_generator.GenerationResult(found=True, answer="a", cited=[CHUNKS[0]], model_load_ms=4852)
+    setup.result = answer_generator.GenerationResult(
+        found=True, answer="a", cited=[CHUNKS[0]], model_load_ms=4852
+    )
     assert main(["What does a 404 status code mean?"]) == 0
     assert "the model was loaded for this query, which took 4.9 seconds" in capsys.readouterr().out
 
@@ -463,6 +492,7 @@ def test_main_data_dir_without_an_index(setup, tmp_path, capsys):
 
 
 # --- Real model (task 4.1) ---
+
 
 @pytest.mark.ollama
 @pytest.mark.skipif(

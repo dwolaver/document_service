@@ -198,8 +198,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Build the RFC search index.")
     parser.add_argument(
         "--config-dir",
-        help="Directory holding {c} and {i}. Defaults to ${e}, then config/ at the repository "
-        "root.".format(c=paths.CORPUS_FILE, i=paths.INGEST_CONFIG_FILE, e=paths.CONFIG_DIR_ENV),
+        help="Directory holding {c} and {i}. Defaults to ${e}, then config/ at the repository root.".format(
+            c=paths.CORPUS_FILE, i=paths.INGEST_CONFIG_FILE, e=paths.CONFIG_DIR_ENV
+        ),
     )
     parser.add_argument(
         "--corpus",

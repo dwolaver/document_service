@@ -31,6 +31,7 @@ def _result(usage, is_error=False, result="Report."):
 
 # --- Pinned model (task 2.1) ---
 
+
 def _skill(tmp_path, text):
     path = tmp_path / "SKILL.md"
     path.write_text(text, encoding="utf-8")
@@ -63,6 +64,7 @@ def test_missing_skill_is_rejected(tmp_path):
 
 
 # --- Result parsing and the acceptance rule (task 2.1) ---
+
 
 def test_parse_result_takes_the_last_json_line():
     stdout = "[claude-code:warning] something\n" + json.dumps(_result({PINNED: 5}))
@@ -124,6 +126,7 @@ def test_no_model_usage_is_rejected():
 
 
 # --- The run (task 2.2) ---
+
 
 def _git(root, *args):
     subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
@@ -282,14 +285,22 @@ def test_command_line_runs_the_pinned_model_with_limited_tools(monkeypatch, repo
     assert command[command.index("--output-format") + 1] == "json"
     tools = command[command.index("--allowedTools") + 1].split(",")
     assert set(tools) == {
-        "Read", "Glob", "Grep", "Write", "Edit",
-        "Bash(git log:*)", "Bash(git diff:*)", "Bash(git show:*)", "Bash(git rev-parse:*)",
+        "Read",
+        "Glob",
+        "Grep",
+        "Write",
+        "Edit",
+        "Bash(git log:*)",
+        "Bash(git diff:*)",
+        "Bash(git show:*)",
+        "Bash(git rev-parse:*)",
     }
     assert kwargs["cwd"] == str(repo)
     assert kwargs["stdin"] is subprocess.DEVNULL
 
 
 # --- Console ---
+
 
 def test_main_success(monkeypatch, repo, claude, capsys):
     monkeypatch.setattr(ua, "ROOT", str(repo))
@@ -311,6 +322,7 @@ def test_main_rejects_a_bad_release(release, capsys):
 
 
 # --- Rationale (task 2.3) ---
+
 
 def test_opening_comment_explains_the_script():
     doc = ua.__doc__

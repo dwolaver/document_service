@@ -47,7 +47,7 @@ def _verify(content, headers, rfc_number):
     if declared_length is not None:
         try:
             expected = int(declared_length)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             expected = None
         if expected is not None and expected != len(content):
             _log_error(
