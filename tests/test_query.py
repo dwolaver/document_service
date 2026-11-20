@@ -370,6 +370,21 @@ def test_model_failures(setup, error, code):
     assert response.error_string == str(error)
 
 
+def test_model_body_that_is_not_a_json_object_is_an_invalid_response(tmp_path, monkeypatch, data_dir):
+    class ListResponse:
+        status_code = 200
+
+        def json(self):
+            return ["not", "an", "object"]
+
+    monkeypatch.setattr(answer_generator, "_post_chat", lambda url, body, timeout: ListResponse())
+    _write_config(tmp_path, CONFIG, monkeypatch)
+    response = run_query("What does a 404 status code mean?")
+    assert (response.success, response.error_code) == (False, QueryErrorCode.MODEL_INVALID_RESPONSE)
+    assert response.error_string is not None
+    assert "isn't a JSON object" in response.error_string
+
+
 # --- Timings (task 3.2) ---
 
 

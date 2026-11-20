@@ -6,10 +6,13 @@ passage supports the answer, which the golden question set measures separately.
 """
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any
 
 import requests
+
+from rfc_qa.chunk import Chunk
 
 NOT_FOUND_ANSWER = "The indexed RFCs don't answer this question."
 
@@ -54,19 +57,19 @@ class GenerationResult:
     """The checked outcome of one model call. ``cited`` holds the retrieved chunks that were cited."""
 
     found: bool
-    answer: Optional[str]
-    cited: List = field(default_factory=list)
-    model_load_ms: Optional[int] = None
-    generation_ms: Optional[int] = None
-    prompt_tokens: Optional[int] = None
-    answer_tokens: Optional[int] = None
+    answer: str | None
+    cited: list[Chunk] = field(default_factory=list)
+    model_load_ms: int | None = None
+    generation_ms: int | None = None
+    prompt_tokens: int | None = None
+    answer_tokens: int | None = None
 
 
-def _label(position):
+def _label(position: int) -> str:
     return "P{n}".format(n=position + 1)
 
 
-def build_messages(question, chunks):
+def build_messages(question: str, chunks: Sequence[Chunk]) -> list[dict[str, str]]:
     """Return the chat messages for ``question``, with ``chunks`` labeled in retrieval order."""
     passages = "\n\n".join(
         "Passage {label} (RFC {rfc} section {section}: {title})\n{text}".format(
@@ -84,7 +87,7 @@ def build_messages(question, chunks):
     ]
 
 
-def _request_body(question, chunks, settings):
+def _request_body(question: str, chunks: Sequence[Chunk], settings: ModelSettings) -> dict[str, Any]:
     return {
         "model": settings.model,
         "messages": build_messages(question, chunks),
@@ -98,19 +101,21 @@ def _request_body(question, chunks, settings):
     }
 
 
-def _post_chat(url, body, timeout):
+def _post_chat(url: str, body: dict[str, Any], timeout: float) -> requests.Response:
     """Send one chat request to Ollama. This is the only network call, so tests replace it."""
     return requests.post(url, json=body, timeout=timeout)
 
 
-def _ollama_error(response):
+def _ollama_error(response: requests.Response) -> str:
     try:
-        return response.json().get("error", "")
+        body = response.json()
     except ValueError:
         return response.text
+    error = body.get("error", "") if isinstance(body, dict) else ""
+    return error if isinstance(error, str) else str(error)
 
 
-def _call_model(question, chunks, settings):
+def _call_model(question: str, chunks: Sequence[Chunk], settings: ModelSettings) -> dict[str, Any]:
     url = settings.base_url.rstrip("/") + "/api/chat"
     try:
         response = _post_chat(url, _request_body(question, chunks, settings), settings.timeout_seconds)
@@ -134,18 +139,23 @@ def _call_model(question, chunks, settings):
             "Ollama returned HTTP {s}: {e}".format(s=response.status_code, e=_ollama_error(response))
         )
     try:
-        return response.json()
+        payload = response.json()
     except ValueError as exc:
         raise ModelResponseError("Ollama returned a response that isn't JSON.") from exc
+    if not isinstance(payload, dict):
+        raise ModelResponseError("Ollama returned a response that isn't a JSON object.")
+    return payload
 
 
-def _parse_answer(payload):
+def _parse_answer(payload: dict[str, Any]) -> tuple[bool, str, list[str]]:
     """Return (found, answer, labels) from the model's structured output, or raise."""
-    message = payload.get("message") if isinstance(payload, dict) else None
+    message = payload.get("message")
     content = message.get("content") if isinstance(message, dict) else None
+    if not isinstance(content, str):
+        raise ModelResponseError("The model's output isn't valid JSON.")
     try:
         output = json.loads(content)
-    except (TypeError, ValueError) as exc:
+    except ValueError as exc:
         raise ModelResponseError("The model's output isn't valid JSON.") from exc
     found, answer, labels = (
         (output.get("found"), output.get("answer"), output.get("citations"))
@@ -162,10 +172,10 @@ def _parse_answer(payload):
     return found, answer, labels
 
 
-def _cited_chunks(labels, chunks):
+def _cited_chunks(labels: list[str], chunks: Sequence[Chunk]) -> list[Chunk]:
     """Map cited labels to retrieved chunks, dropping unknown labels and repeats."""
     by_label = {_label(position): chunk for position, chunk in enumerate(chunks)}
-    cited = []
+    cited: list[Chunk] = []
     for label in labels:
         chunk = by_label.get(label.strip())
         if chunk is not None and chunk not in cited:
@@ -173,11 +183,16 @@ def _cited_chunks(labels, chunks):
     return cited
 
 
-def _to_ms(nanoseconds):
+def _int_or_none(value: object) -> int | None:
+    """Return ``value`` if it's an integer, otherwise ``None``. Ollama's counts are optional."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _to_ms(nanoseconds: int | None) -> int | None:
     return None if nanoseconds is None else int(round(nanoseconds / _NANOSECONDS_PER_MS))
 
 
-def generate_answer(question, chunks, settings):
+def generate_answer(question: str, chunks: Sequence[Chunk], settings: ModelSettings) -> GenerationResult:
     """Answer ``question`` from ``chunks`` and return a :class:`GenerationResult`.
 
     Raises :class:`ModelUnavailableError` or :class:`ModelResponseError` when no usable answer comes
@@ -199,7 +214,7 @@ def generate_answer(question, chunks, settings):
         found=is_answered,
         answer=answer.strip() if is_answered else None,
         cited=cited if is_answered else [],
-        model_load_ms=_to_ms(payload.get("load_duration")),
+        model_load_ms=_to_ms(_int_or_none(payload.get("load_duration"))),
         generation_ms=_to_ms(sum(ns for ns in generation_ns if isinstance(ns, int)))
         if any(isinstance(ns, int) for ns in generation_ns)
         else None,

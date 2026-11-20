@@ -7,6 +7,7 @@ import re
 import sqlite3
 import sys
 import tempfile
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 from rfc_qa import paths
@@ -59,11 +60,11 @@ class SearchResult:
     score: float
 
 
-def _log_error(message):
+def _log_error(message: str) -> None:
     print(message, file=sys.stderr)
 
 
-def _write_index(path, chunks, metadata):
+def _write_index(path: str, chunks: Iterable[Chunk], metadata: Mapping[str, object]) -> None:
     connection = sqlite3.connect(path)
     try:
         # The file is only moved into place once complete, so a journal adds nothing.
@@ -87,13 +88,13 @@ def _write_index(path, chunks, metadata):
         connection.close()
 
 
-def build_index(chunks, metadata, path):
+def build_index(chunks: Iterable[Chunk], metadata: Mapping[str, object], path: str) -> bool:
     """Write ``chunks`` and ``metadata`` to a new index at ``path``, replacing it atomically.
 
     Returns ``True`` on success. On failure it returns ``False`` after printing a diagnostic,
     leaving any existing index unchanged and no temporary file behind.
     """
-    tmp_path = None
+    tmp_path: str | None = None
     try:
         tmp_fd, tmp_path = tempfile.mkstemp(
             dir=os.path.dirname(os.path.abspath(path)), prefix=".index.", suffix=".tmp"
@@ -109,7 +110,7 @@ def build_index(chunks, metadata, path):
         return False
 
 
-def _connect_read_only(path):
+def _connect_read_only(path: str) -> sqlite3.Connection | None:
     """Open an existing index. SQLite would otherwise create an empty file at a missing path."""
     if not os.path.isfile(path):
         _log_error("Index not found: {p!r}. Run rfc-ingest to build it.".format(p=path))
@@ -118,7 +119,7 @@ def _connect_read_only(path):
     return sqlite3.connect(uri, uri=True)
 
 
-def read_metadata(path):
+def read_metadata(path: str) -> dict[str, str] | None:
     """Return the index's build configuration as a dict, or ``None`` if it can't be read."""
     connection = _connect_read_only(path)
     if connection is None:
@@ -132,13 +133,13 @@ def read_metadata(path):
         connection.close()
 
 
-def _to_match_expression(query_text):
+def _to_match_expression(query_text: str) -> str:
     """Quote each token, so that user text can't be read as FTS query syntax."""
     tokens = re.findall(r"\w+", query_text)
     return " OR ".join('"{t}"'.format(t=token) for token in tokens)
 
 
-def search(path, query_text, limit=DEFAULT_LIMIT):
+def search(path: str, query_text: str, limit: int = DEFAULT_LIMIT) -> list[SearchResult] | None:
     """Return up to ``limit`` chunks matching ``query_text``, best first.
 
     Returns an empty list when nothing matches, and ``None`` after printing a diagnostic when the
@@ -161,14 +162,14 @@ def search(path, query_text, limit=DEFAULT_LIMIT):
         connection.close()
 
 
-def _excerpt(text):
+def _excerpt(text: str) -> str:
     flattened = " ".join(text.split())
     if len(flattened) <= _EXCERPT_CHARS:
         return flattened
     return flattened[:_EXCERPT_CHARS].rstrip() + "..."
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     """Console entry point: print matching chunks and return an exit code."""
     parser = argparse.ArgumentParser(description="Search the RFC keyword index.")
     parser.add_argument("query", help="The search text.")

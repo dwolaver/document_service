@@ -39,11 +39,11 @@ class SelectedDir:
     path: str
     source: str
 
-    def file(self, name):
+    def file(self, name: str) -> str:
         return os.path.join(self.path, name)
 
 
-def _select_dir(explicit, explicit_source, env, default):
+def _select_dir(explicit: str | None, explicit_source: str, env: str, default: str) -> SelectedDir:
     """Apply the precedence: ``explicit``, then ``env`` if it's set and not empty, then ``default``.
 
     A relative explicit or environment path resolves from the working directory.
@@ -55,7 +55,7 @@ def _select_dir(explicit, explicit_source, env, default):
     return SelectedDir(default, "default")
 
 
-def resolve_config_dir(explicit=None, explicit_source="--config-dir"):
+def resolve_config_dir(explicit: str | None = None, explicit_source: str = "--config-dir") -> SelectedDir:
     """Return the configuration directory to use, raising :class:`ConfigDirError` if it's missing.
 
     The order is ``explicit``, then ``RFC_QA_CONFIG_DIR`` if it's set and not empty, then the
@@ -71,7 +71,7 @@ def resolve_config_dir(explicit=None, explicit_source="--config-dir"):
     return config_dir
 
 
-def resolve_data_dir(explicit=None, explicit_source="--data-dir"):
+def resolve_data_dir(explicit: str | None = None, explicit_source: str = "--data-dir") -> SelectedDir:
     """Return the data directory to use, which holds ``rfcs/`` and ``index.db``.
 
     The order is ``explicit``, then ``RFC_QA_DATA_DIR`` if it's set and not empty, then the

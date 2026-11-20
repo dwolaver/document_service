@@ -40,6 +40,8 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Sequence
+from typing import Any
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILL_RELATIVE_PATH = os.path.join(".claude", "skills", "update-architecture", "SKILL.md")
@@ -69,11 +71,11 @@ class ArchitectureError(Exception):
     """A reason not to run, or not to keep a run's result, ready to show."""
 
 
-def _log_error(message):
+def _log_error(message: str) -> None:
     print(message, file=sys.stderr)
 
 
-def read_pinned_model(skill_path):
+def read_pinned_model(skill_path: str) -> str:
     """Return the full model ID from the skill's frontmatter, raising if it's missing or an alias."""
     try:
         with open(skill_path, encoding="utf-8") as skill_file:
@@ -93,7 +95,7 @@ def read_pinned_model(skill_path):
     return model
 
 
-def parse_result(stdout):
+def parse_result(stdout: str) -> dict[str, Any] | None:
     """Return the final JSON result from headless output, or ``None`` if there isn't one."""
     for line in reversed(stdout.strip().splitlines()):
         try:
@@ -105,7 +107,7 @@ def parse_result(stdout):
     return None
 
 
-def _output_tokens(result):
+def _output_tokens(result: dict[str, Any]) -> dict[str, Any]:
     usage = result.get("modelUsage")
     if not isinstance(usage, dict):
         return {}
@@ -115,7 +117,7 @@ def _output_tokens(result):
     }
 
 
-def describe_usage(result):
+def describe_usage(result: object) -> str:
     """Return the models a run used and their output tokens, for messages."""
     tokens = _output_tokens(result) if isinstance(result, dict) else {}
     if not tokens:
@@ -123,7 +125,7 @@ def describe_usage(result):
     return ", ".join("{m}: {t} output tokens".format(m=m, t=t) for m, t in sorted(tokens.items()))
 
 
-def check_run(exit_code, result, pinned_model):
+def check_run(exit_code: int, result: dict[str, Any] | None, pinned_model: str) -> str | None:
     """Return ``None`` when the run can be kept, otherwise the reason to reject it.
 
     The run must exit cleanly and report no error. The pinned model must appear in ``modelUsage``
@@ -147,20 +149,20 @@ def check_run(exit_code, result, pinned_model):
     return None
 
 
-def _git(root, *args):
+def _git(root: str, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=True).stdout
 
 
-def _changed_paths(root):
+def _changed_paths(root: str) -> set[str]:
     """Return changed and untracked paths, relative to ``root``."""
-    paths = set()
+    paths: set[str] = set()
     for line in _git(root, "status", "--porcelain", "--untracked-files=all").splitlines():
         path = line[3:]
         paths.add(path.split(" -> ")[-1])
     return paths
 
 
-def _file_hash(root, path):
+def _file_hash(root: str, path: str) -> str | None:
     full_path = os.path.join(root, path)
     if not os.path.isfile(full_path):
         return None
@@ -168,20 +170,20 @@ def _file_hash(root, path):
         return hashlib.sha256(changed_file.read()).hexdigest()
 
 
-def _snapshot(root):
+def _snapshot(root: str) -> dict[str, str | None]:
     return {path: _file_hash(root, path) for path in _changed_paths(root)}
 
 
-def _other_changes(root, before):
+def _other_changes(root: str, before: dict[str, str | None]) -> list[str]:
     """Return files other than ARCHITECTURE.md that changed since ``before`` was taken."""
-    changed = []
+    changed: list[str] = []
     for path in sorted(_changed_paths(root) | set(before)):
         if path != DOC_RELATIVE_PATH and before.get(path, "absent") != _file_hash(root, path):
             changed.append(path)
     return changed
 
 
-def _run_claude(root, release, model):
+def _run_claude(root: str, release: str, model: str) -> subprocess.CompletedProcess[str]:
     """Run the skill headlessly. This is the only call to Claude Code, so tests replace it."""
     command = [
         "claude",
@@ -199,7 +201,7 @@ def _run_claude(root, release, model):
     return subprocess.run(command, cwd=root, capture_output=True, text=True, stdin=subprocess.DEVNULL)
 
 
-def _restore(doc_path, original):
+def _restore(doc_path: str, original: bytes | None) -> None:
     if original is None:
         if os.path.exists(doc_path):
             os.remove(doc_path)
@@ -208,7 +210,7 @@ def _restore(doc_path, original):
             doc_file.write(original)
 
 
-def update_architecture(root, release):
+def update_architecture(root: str, release: str) -> str:
     """Run the skill for ``release`` and return its report, raising :class:`ArchitectureError`.
 
     On any rejection, ARCHITECTURE.md is restored to how it was before the run.
@@ -222,7 +224,7 @@ def update_architecture(root, release):
         )
 
     doc_path = os.path.join(root, DOC_RELATIVE_PATH)
-    original = None
+    original: bytes | None = None
     if os.path.exists(doc_path):
         with open(doc_path, "rb") as doc_file:
             original = doc_file.read()
@@ -236,13 +238,14 @@ def update_architecture(root, release):
             reason = "The run changed files other than {d}, which were left as they are: {o}".format(
                 d=DOC_RELATIVE_PATH, o=", ".join(others)
             )
-    if reason is not None:
+    # check_run already rejects a missing result. Testing it here as well tells the type checker.
+    if reason is not None or result is None:
         _restore(doc_path, original)
         raise ArchitectureError("Rejected, and {d} was restored. {r}".format(d=DOC_RELATIVE_PATH, r=reason))
     return "{report}\n\nModels used: {u}.".format(report=result.get("result", ""), u=describe_usage(result))
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     """Console entry point: return 0 when the result is kept, 1 otherwise."""
     parser = argparse.ArgumentParser(description="Update ARCHITECTURE.md with the pinned model.")
     parser.add_argument("release", help="The release the file describes, for example v0.1.0.")

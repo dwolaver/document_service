@@ -9,9 +9,12 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any, TypeGuard
 
 from rfc_qa import paths
+from rfc_qa.chunk import Chunk
 from rfc_qa.ingestion.chunker import chunk_sections
 from rfc_qa.ingestion.rfc_downloader import download_rfc
 from rfc_qa.ingestion.rfc_parser import parse_rfc
@@ -39,11 +42,11 @@ class IngestConfig:
     target_chunk_tokens: int
 
     @property
-    def max_chunk_chars(self):
+    def max_chunk_chars(self) -> int:
         """The chunk size limit in characters, derived from the token target."""
         return int(self.target_chunk_tokens * self.chars_per_token)
 
-    def as_metadata(self):
+    def as_metadata(self) -> dict[str, object]:
         return {
             "embedding_model_name": self.embedding_model_name,
             "embedding_max_tokens": self.embedding_max_tokens,
@@ -60,11 +63,12 @@ class IngestSummary:
     largest_chunk_chars: int
 
 
-def _log_error(message):
+def _log_error(message: str) -> None:
     print(message, file=sys.stderr)
 
 
-def _load_json(path):
+def _load_json(path: str) -> Any:
+    # Parsed JSON is untyped until the caller has validated it.
     try:
         with open(path, encoding="utf-8") as json_file:
             return json.load(json_file)
@@ -72,12 +76,12 @@ def _load_json(path):
         raise IngestError("Failed to read {p!r}: {e}".format(p=path, e=exc)) from exc
 
 
-def _is_integer(value):
+def _is_integer(value: object) -> TypeGuard[int]:
     # bool is a subclass of int but is not a valid number here.
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def _parse_corpus_entry(entry):
+def _parse_corpus_entry(entry: object) -> CorpusEntry:
     if not isinstance(entry, dict):
         raise IngestError("Corpus entry is not an object: {e!r}".format(e=entry))
     number, family, title = entry.get("number"), entry.get("family"), entry.get("title")
@@ -90,14 +94,14 @@ def _parse_corpus_entry(entry):
     return CorpusEntry(number, family, title)
 
 
-def load_corpus(path):
+def load_corpus(path: str) -> list[CorpusEntry]:
     """Return the validated manifest entries, raising :class:`IngestError` if it's invalid."""
     data = _load_json(path)
     rfcs = data.get("rfcs") if isinstance(data, dict) else None
     if not isinstance(rfcs, list) or not rfcs:
         raise IngestError("Corpus {p!r} must have a non-empty 'rfcs' list.".format(p=path))
     entries = [_parse_corpus_entry(entry) for entry in rfcs]
-    seen = set()
+    seen: set[int] = set()
     for entry in entries:
         if entry.number in seen:
             raise IngestError("Corpus lists RFC {n} more than once.".format(n=entry.number))
@@ -105,19 +109,19 @@ def load_corpus(path):
     return entries
 
 
-def _positive_number(value, name):
+def _positive_number(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
         raise IngestError("Config {n} must be a positive number, got {v!r}.".format(n=name, v=value))
     return value
 
 
-def _positive_integer(value, name):
+def _positive_integer(value: object, name: str) -> int:
     if not _is_integer(value) or value <= 0:
         raise IngestError("Config {n} must be a positive integer, got {v!r}.".format(n=name, v=value))
     return value
 
 
-def load_config(path):
+def load_config(path: str) -> IngestConfig:
     """Return the validated configuration, raising :class:`IngestError` if it's invalid."""
     data = _load_json(path)
     if not isinstance(data, dict):
@@ -143,11 +147,11 @@ def load_config(path):
     return config
 
 
-def _rfc_path(rfc_dir, number):
+def _rfc_path(rfc_dir: str, number: int) -> str:
     return os.path.join(rfc_dir, "rfc{n}.txt".format(n=number))
 
 
-def _ensure_downloaded(entries, rfc_dir):
+def _ensure_downloaded(entries: Sequence[CorpusEntry], rfc_dir: str) -> None:
     os.makedirs(rfc_dir, exist_ok=True)
     for entry in entries:
         if not os.path.exists(_rfc_path(rfc_dir, entry.number)):
@@ -155,7 +159,7 @@ def _ensure_downloaded(entries, rfc_dir):
                 raise IngestError("RFC {n}: download failed.".format(n=entry.number))
 
 
-def _chunk_rfc(entry, rfc_dir, max_chunk_chars):
+def _chunk_rfc(entry: CorpusEntry, rfc_dir: str, max_chunk_chars: int) -> list[Chunk]:
     with open(_rfc_path(rfc_dir, entry.number), encoding="utf-8", errors="replace") as rfc_file:
         sections = parse_rfc(rfc_file.read())
     chunks = chunk_sections(sections, entry.number, entry.title, entry.family, max_chunk_chars)
@@ -164,14 +168,14 @@ def _chunk_rfc(entry, rfc_dir, max_chunk_chars):
     return chunks
 
 
-def run_ingestion(corpus_path, config_path, data_dir):
+def run_ingestion(corpus_path: str, config_path: str, data_dir: str) -> IngestSummary:
     """Build the index, returning an :class:`IngestSummary` or raising :class:`IngestError`."""
     entries = load_corpus(corpus_path)
     config = load_config(config_path)
     rfc_dir = os.path.join(data_dir, paths.RFCS_FOLDER)
     _ensure_downloaded(entries, rfc_dir)
 
-    chunks = []
+    chunks: list[Chunk] = []
     for entry in entries:
         chunks.extend(_chunk_rfc(entry, rfc_dir, config.max_chunk_chars))
 
@@ -180,7 +184,7 @@ def run_ingestion(corpus_path, config_path, data_dir):
     return IngestSummary(len(entries), len(chunks), max(len(chunk.text) for chunk in chunks))
 
 
-def _input_paths(args):
+def _input_paths(args: argparse.Namespace) -> tuple[str, str]:
     """Return the manifest and configuration paths, taking from the configuration directory only
     the files no flag names, so the directory is resolved only when it's used."""
     corpus_path, config_path = args.corpus, args.config
@@ -193,7 +197,7 @@ def _input_paths(args):
     return corpus_path, config_path
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     """Console entry point: build the index, print a summary and return an exit code."""
     parser = argparse.ArgumentParser(description="Build the RFC search index.")
     parser.add_argument(
