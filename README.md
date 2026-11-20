@@ -121,8 +121,9 @@ repository root by default, and the commands find them there from any directory.
 The network integration test is skipped unless `RFC_DOWNLOADER_NETWORK_TESTS=1` is set.
 
 The code is linted and formatted with [ruff](https://docs.astral.sh/ruff/) and type-checked with
-[mypy](https://mypy-lang.org/), both configured in `pyproject.toml`. A pre-commit hook runs all three
-checks before each commit. Install it once per clone:
+[mypy](https://mypy-lang.org/), both configured in `pyproject.toml`. A pre-commit hook runs these
+checks before each commit, along with a [gitleaks](https://github.com/gitleaks/gitleaks) scan of the
+staged changes for secrets. Install it once per clone:
 
 ```
 pre-commit install
@@ -140,10 +141,25 @@ ruff check --fix
 The hook only reports problems, and never changes files. mypy checks only annotated functions for
 now.
 
-Changes reach `main` through pull requests. GitHub Actions runs the tests (the `test` check) and the
-same lint, format and type checks as the pre-commit hook (the `quality` check) on each pull request
-and on each push to `main`, without network access to external document sources. A pull request
-can't merge until both pass, so skipping the hook doesn't get unchecked code onto `main`.
+pre-commit builds gitleaks from the version pinned in `.pre-commit-config.yaml` the first time the hook
+runs, which takes a few seconds and needs network access once. Nothing else needs installing. A
+finding stops the commit and shows the file, line and kind of secret, with the value redacted.
+
+The repository is public, so a secret that reaches a commit, or is pushed, has to be treated as
+leaked. Rotate it with whoever issued it, as well as removing it from the code. If a finding has been
+reviewed and isn't a secret, add the fingerprint from the report, exactly as printed, as a line in
+`.gitleaksignore` at the repository root. Only that finding is ignored.
+
+Changes reach `main` through pull requests. On each pull request and each push to `main`, GitHub
+Actions runs three checks, without network access to external document sources:
+
+- `test` runs the tests.
+- `quality` runs the same lint, format and type checks as the pre-commit hook.
+- `secrets` scans every commit the pull request adds, or every commit pushed, with the same gitleaks
+  version as the hook. A secret added in one commit and deleted in a later one still fails it.
+
+A pull request can't merge until all three pass, so skipping the hook doesn't get unchecked code or a
+secret onto `main`.
 
 Each change is reviewed, then archived on its branch, then merged, so that the code, spec and
 archive land as one commit. The `archive-check` check enforces this by failing while a pull request
