@@ -21,6 +21,12 @@ def dirs(tmp_path):
     return str(flag), str(env)
 
 
+def test_repo_root_is_the_repository_root():
+    # The other default tests are relative to REPO_ROOT, so they would pass with a wrong one.
+    assert os.path.isfile(os.path.join(paths.REPO_ROOT, "pyproject.toml"))
+    assert os.path.isdir(os.path.join(paths.REPO_ROOT, "config"))
+
+
 def test_default_is_config_at_the_repository_root():
     assert paths.DEFAULT_CONFIG_DIR == os.path.join(paths.REPO_ROOT, "config")
     assert resolve_config_dir() == SelectedDir(paths.DEFAULT_CONFIG_DIR, "default")

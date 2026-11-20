@@ -12,7 +12,7 @@ COMMANDS = {
     "rfc-search": "rfc_qa.retrieval.keyword_index:main",
 }
 
-# Python files allowed at the repository root. Service code belongs in the rfc_qa package.
+# Python files allowed at the repository root. Service code belongs in the rfc_qa package in src/.
 ROOT_MODULE_ALLOW_LIST: set[str] = set()
 
 

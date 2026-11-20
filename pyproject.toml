@@ -18,6 +18,7 @@ rfc-query = "rfc_qa.query:main"
 rfc-search = "rfc_qa.retrieval.keyword_index:main"
 
 [tool.setuptools.packages.find]
+where = ["src"]
 include = ["rfc_qa*"]
 
 [tool.ruff]
@@ -32,7 +33,9 @@ include = ["*.py"]
 select = ["E4", "E7", "E9", "F", "I", "B"]
 
 [tool.mypy]
-files = ["rfc_qa", "scripts", "tests"]
+# The package is in src/. mypy doesn't follow the editable install, so it looks there directly.
+mypy_path = "src"
+files = ["src", "scripts", "tests"]
 explicit_package_bases = true
 warn_unused_configs = true
 strict = true

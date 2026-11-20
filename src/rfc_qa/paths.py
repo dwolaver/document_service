@@ -1,10 +1,10 @@
 """Locations of the configuration and generated data.
 
-The repository root is the directory above this package, so the paths hold whatever the working
-directory. Configuration is read from one directory, which defaults to ``config/`` at the root
-and can be overridden by a flag or ``RFC_QA_CONFIG_DIR``. Generated data (downloaded RFCs and the
-index) lives in one data directory, which defaults to ``data/`` at the root and can be overridden
-by a flag or ``RFC_QA_DATA_DIR``.
+The repository root is two directories above this package, which is in ``src/``, so the paths hold
+whatever the working directory. Configuration is read from one directory, which defaults to
+``config/`` at the root and can be overridden by a flag or ``RFC_QA_CONFIG_DIR``. Generated data
+(downloaded RFCs and the index) lives in one data directory, which defaults to ``data/`` at the root
+and can be overridden by a flag or ``RFC_QA_DATA_DIR``.
 
 Only editable installs (``pip install -e .``) are supported: a regular install would copy the
 package into site-packages, away from the configuration and data in the checkout.
@@ -13,7 +13,7 @@ package into site-packages, away from the configuration and data in the checkout
 import os
 from dataclasses import dataclass
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 DEFAULT_CONFIG_DIR = os.path.join(REPO_ROOT, "config")
 CONFIG_DIR_ENV = "RFC_QA_CONFIG_DIR"

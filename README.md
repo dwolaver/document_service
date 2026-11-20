@@ -114,9 +114,14 @@ pytest
 
 `requirements-dev.txt` installs the project in editable mode, which provides the `rfc-ingest`,
 `rfc-query` and `rfc-search` commands. After pulling a change to `pyproject.toml`, run the `pip
-install` line again. The code lives in the `rfc_qa` package, with a subpackage each for ingestion,
-retrieval and generation. Configuration lives in `config/` and generated data in `data/`, both at the
-repository root by default, and the commands find them there from any directory.
+install` line again. The code lives in the `rfc_qa` package in `src/`, with a subpackage each for
+ingestion, retrieval and generation. Configuration lives in `config/` and generated data in `data/`,
+both at the repository root by default, and the commands find them there from any directory.
+
+The package is only imported as installed, never from the checkout. The commands, the tests and
+module runs such as `python -m rfc_qa.query` all need the editable install. An install made before
+the package moved to `src/` still points at the old `rfc_qa/` directory, so run the `pip install` line
+again once after pulling that change.
 
 The network integration test is skipped unless `RFC_DOWNLOADER_NETWORK_TESTS=1` is set.
 
@@ -139,7 +144,7 @@ ruff check --fix
 ```
 
 The hook only reports problems, and never changes files. mypy runs in strict mode for the `rfc_qa`
-package and `scripts/`, so every function there needs complete annotations. Tests don't need
+package in `src/` and `scripts/`, so every function there needs complete annotations. Tests don't need
 annotations, but mypy still checks the bodies of test functions, including `None` handling. A
 `# type: ignore` has to name the error it suppresses, such as `# type: ignore[arg-type]`, and mypy
 reports one that isn't needed.
