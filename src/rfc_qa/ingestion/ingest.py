@@ -67,13 +67,13 @@ def _log_error(message: str) -> None:
     print(message, file=sys.stderr)
 
 
-def _load_json(path: str) -> Any:
+def _load_json(path: paths.ConfigFile) -> Any:
     # Parsed JSON is untyped until the caller has validated it.
     try:
-        with open(path, encoding="utf-8") as json_file:
+        with paths.as_traversable(path).open(encoding="utf-8") as json_file:
             return json.load(json_file)
     except (OSError, ValueError) as exc:
-        raise IngestError("Failed to read {p!r}: {e}".format(p=path, e=exc)) from exc
+        raise IngestError("Failed to read {p!r}: {e}".format(p=str(path), e=exc)) from exc
 
 
 def _is_integer(value: object) -> TypeGuard[int]:
@@ -94,12 +94,12 @@ def _parse_corpus_entry(entry: object) -> CorpusEntry:
     return CorpusEntry(number, family, title)
 
 
-def load_corpus(path: str) -> list[CorpusEntry]:
+def load_corpus(path: paths.ConfigFile) -> list[CorpusEntry]:
     """Return the validated manifest entries, raising :class:`IngestError` if it's invalid."""
     data = _load_json(path)
     rfcs = data.get("rfcs") if isinstance(data, dict) else None
     if not isinstance(rfcs, list) or not rfcs:
-        raise IngestError("Corpus {p!r} must have a non-empty 'rfcs' list.".format(p=path))
+        raise IngestError("Corpus {p!r} must have a non-empty 'rfcs' list.".format(p=str(path)))
     entries = [_parse_corpus_entry(entry) for entry in rfcs]
     seen: set[int] = set()
     for entry in entries:
@@ -121,11 +121,11 @@ def _positive_integer(value: object, name: str) -> int:
     return value
 
 
-def load_config(path: str) -> IngestConfig:
+def load_config(path: paths.ConfigFile) -> IngestConfig:
     """Return the validated configuration, raising :class:`IngestError` if it's invalid."""
     data = _load_json(path)
     if not isinstance(data, dict):
-        raise IngestError("Config {p!r} must be a JSON object.".format(p=path))
+        raise IngestError("Config {p!r} must be a JSON object.".format(p=str(path)))
     model = data.get("embedding_model")
     if not isinstance(model, dict):
         raise IngestError("Config embedding_model must be an object, got {v!r}.".format(v=model))
@@ -168,7 +168,9 @@ def _chunk_rfc(entry: CorpusEntry, rfc_dir: str, max_chunk_chars: int) -> list[C
     return chunks
 
 
-def run_ingestion(corpus_path: str, config_path: str, data_dir: str) -> IngestSummary:
+def run_ingestion(
+    corpus_path: paths.ConfigFile, config_path: paths.ConfigFile, data_dir: str
+) -> IngestSummary:
     """Build the index, returning an :class:`IngestSummary` or raising :class:`IngestError`."""
     entries = load_corpus(corpus_path)
     config = load_config(config_path)
@@ -184,10 +186,11 @@ def run_ingestion(corpus_path: str, config_path: str, data_dir: str) -> IngestSu
     return IngestSummary(len(entries), len(chunks), max(len(chunk.text) for chunk in chunks))
 
 
-def _input_paths(args: argparse.Namespace) -> tuple[str, str]:
+def _input_paths(args: argparse.Namespace) -> tuple[paths.ConfigFile, paths.ConfigFile]:
     """Return the manifest and configuration paths, taking from the configuration directory only
     the files no flag names, so the directory is resolved only when it's used."""
-    corpus_path, config_path = args.corpus, args.config
+    corpus_path: paths.ConfigFile | None = args.corpus
+    config_path: paths.ConfigFile | None = args.config
     if corpus_path is None or config_path is None:
         config_dir = paths.resolve_config_dir(args.config_dir)
         if corpus_path is None:
@@ -202,7 +205,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build the RFC search index.")
     parser.add_argument(
         "--config-dir",
-        help="Directory holding {c} and {i}. Defaults to ${e}, then config/ at the repository root.".format(
+        help="Directory holding {c} and {i}. Defaults to ${e}, then the packaged defaults.".format(
             c=paths.CORPUS_FILE, i=paths.INGEST_CONFIG_FILE, e=paths.CONFIG_DIR_ENV
         ),
     )
@@ -216,8 +219,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument(
         "--data-dir",
-        help="Directory for the downloaded RFCs and the index. Defaults to ${e}, then data/ at the "
-        "repository root.".format(e=paths.DATA_DIR_ENV),
+        help="Directory for the downloaded RFCs and the index. Defaults to ${e}, then the user data "
+        "directory ({d}).".format(e=paths.DATA_DIR_ENV, d=paths.default_data_dir()),
     )
     args = parser.parse_args(argv)
 

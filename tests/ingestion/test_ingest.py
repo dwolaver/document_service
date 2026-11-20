@@ -1,6 +1,7 @@
 import json
 import os
 import pathlib
+import shutil
 
 import pytest
 
@@ -101,7 +102,7 @@ def test_missing_manifest_is_rejected(tmp_path):
 
 
 def test_real_corpus_loads_and_has_the_obsolete_pairs():
-    entries = load_corpus(os.path.join(paths.DEFAULT_CONFIG_DIR, "corpus.json"))
+    entries = load_corpus(paths.packaged_config_dir() / "corpus.json")
     numbers = {entry.number for entry in entries}
     assert len(entries) == 59
     assert {793, 9293, 2616, 9110, 8446, 9846} <= numbers
@@ -166,7 +167,7 @@ def test_missing_config_value_is_rejected(tmp_path, key):
 
 
 def test_real_config_loads():
-    config = load_config(os.path.join(paths.DEFAULT_CONFIG_DIR, "ingest.json"))
+    config = load_config(paths.packaged_config_dir() / "ingest.json")
     assert config.embedding_model_name == "nomic-embed-text"
     assert 0 < config.max_chunk_chars
 
@@ -324,7 +325,7 @@ def ingestion_inputs(monkeypatch):
     calls = []
 
     def fake_run(corpus_path, config_path, data_dir):
-        calls.append((corpus_path, config_path))
+        calls.append((str(corpus_path), str(config_path)))
         return IngestSummary(1, 1, 1)
 
     monkeypatch.setattr(ingest, "run_ingestion", fake_run)
@@ -336,12 +337,12 @@ def _config_dir(path):
     return str(path)
 
 
-def test_defaults_read_from_the_config_directory(ingestion_inputs, tmp_path):
+def test_defaults_read_from_the_packaged_configuration(ingestion_inputs, tmp_path):
     assert main(["--data-dir", str(tmp_path)]) == 0
     assert ingestion_inputs == [
         (
-            os.path.join(paths.DEFAULT_CONFIG_DIR, "corpus.json"),
-            os.path.join(paths.DEFAULT_CONFIG_DIR, "ingest.json"),
+            str(paths.packaged_config_dir() / "corpus.json"),
+            str(paths.packaged_config_dir() / "ingest.json"),
         )
     ]
 
@@ -387,6 +388,16 @@ def test_missing_config_directory_fails_before_downloading(workspace, monkeypatc
     assert not os.path.exists(workspace["index"])
 
 
+def test_selected_directory_without_a_corpus_does_not_use_the_packaged_copy(workspace, capsys):
+    directory = os.path.join(workspace["data_dir"], "partial")
+    os.makedirs(directory)
+    shutil.copy(workspace["config"], os.path.join(directory, "ingest.json"))
+    assert main(["--config-dir", directory, "--data-dir", workspace["data_dir"]]) == 1
+    assert os.path.join(directory, "corpus.json") in capsys.readouterr().err
+    assert workspace["downloads"] == []
+    assert not os.path.exists(workspace["index"])
+
+
 def test_missing_config_directory_is_ignored_when_both_files_are_given(workspace, monkeypatch):
     monkeypatch.setenv(paths.CONFIG_DIR_ENV, os.path.join(workspace["data_dir"], "missing"))
     assert main(_main_args(workspace)) == 0
@@ -408,9 +419,9 @@ def ingestion_data_dirs(monkeypatch):
     return data_dirs
 
 
-def test_data_directory_defaults_to_data_at_the_repository_root(ingestion_data_dirs):
+def test_data_directory_defaults_to_the_user_data_directory(ingestion_data_dirs):
     assert main([]) == 0
-    assert ingestion_data_dirs == [os.path.join(paths.REPO_ROOT, "data")]
+    assert ingestion_data_dirs == [paths.default_data_dir()]
 
 
 def test_environment_selects_the_data_directory(ingestion_data_dirs, tmp_path, monkeypatch):

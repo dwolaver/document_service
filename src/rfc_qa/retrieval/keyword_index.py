@@ -175,8 +175,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("query", help="The search text.")
     parser.add_argument(
         "--data-dir",
-        help="Directory holding {i}. Defaults to ${e}, then data/ at the repository root.".format(
-            i=paths.INDEX_FILE, e=paths.DATA_DIR_ENV
+        help="Directory holding {i}. Defaults to ${e}, then the user data directory ({d}).".format(
+            i=paths.INDEX_FILE, e=paths.DATA_DIR_ENV, d=paths.default_data_dir()
         ),
     )
     parser.add_argument("--index", help="Path to the index file, instead of the one in the data directory.")
