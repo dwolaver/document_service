@@ -4,9 +4,10 @@ Document Q&amp;A Service
 A retrieval-augmented generation (RAG) service that answers questions about IETF RFCs and
 cites the sections its answers come from.
 
-This is a learning project built in public. The pipeline is written by hand rather than with
-a RAG framework, and each step is planned as an [OpenSpec](openspec/) change, so the proposals
-and designs record what was decided, why, and which alternatives were rejected.
+This is a portfolio project, developed in the open. The pipeline is written by hand rather than
+with a RAG framework, so each stage can be inspected and measured. Each step is planned as an
+[OpenSpec](openspec/) change, so the proposals and designs record what was decided, why, and which
+alternatives were rejected.
 
 ## Approach
 
