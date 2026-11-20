@@ -42,7 +42,7 @@ def test_page_furniture_is_removed(name):
 )
 def test_paragraph_across_page_break_stays_adjacent(name, section, first, second):
     lines = _sections(name)[section].text.split("\n")
-    assert lines[lines.index(next(l for l in lines if first in l)) + 1] == second
+    assert lines[lines.index(next(line for line in lines if first in line)) + 1] == second
 
 
 def test_unpaginated_text_is_unchanged():

@@ -13,7 +13,7 @@ COMMANDS = {
 }
 
 # Python files allowed at the repository root. Service code belongs in the rfc_qa package.
-ROOT_MODULE_ALLOW_LIST = set()
+ROOT_MODULE_ALLOW_LIST: set[str] = set()
 
 
 def _console_scripts():
