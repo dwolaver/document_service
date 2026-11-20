@@ -1,28 +1,28 @@
 """Locations of the configuration and generated data.
 
-The repository root is two directories above this package, which is in ``src/``, so the paths hold
-whatever the working directory. Configuration is read from one directory, which defaults to
-``config/`` at the root and can be overridden by a flag or ``RFC_QA_CONFIG_DIR``. Generated data
-(downloaded RFCs and the index) lives in one data directory, which defaults to ``data/`` at the root
-and can be overridden by a flag or ``RFC_QA_DATA_DIR``.
-
-Only editable installs (``pip install -e .``) are supported: a regular install would copy the
-package into site-packages, away from the configuration and data in the checkout.
+Nothing here refers to the repository checkout, so an editable install and a regular install behave
+the same, from any working directory. Configuration is read from one directory, which defaults to
+the files installed with the package and can be overridden by a flag or ``RFC_QA_CONFIG_DIR``.
+Generated data (downloaded RFCs and the index) lives in one data directory, which defaults to the
+user's data directory for rfc-qa and can be overridden by a flag or ``RFC_QA_DATA_DIR``.
 """
 
 import os
 from dataclasses import dataclass
+from importlib.resources import files
+from importlib.resources.abc import Traversable
+from pathlib import Path
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import platformdirs
 
-DEFAULT_CONFIG_DIR = os.path.join(REPO_ROOT, "config")
 CONFIG_DIR_ENV = "RFC_QA_CONFIG_DIR"
 CORPUS_FILE = "corpus.json"
 INGEST_CONFIG_FILE = "ingest.json"
 QUERY_CONFIG_FILE = "query.json"
+PACKAGED_CONFIG_SOURCE = "packaged defaults"
 
 
-DEFAULT_DATA_DIR = os.path.join(REPO_ROOT, "data")
+APP_NAME = "rfc-qa"
 DATA_DIR_ENV = "RFC_QA_DATA_DIR"
 RFCS_FOLDER = "rfcs"
 INDEX_FILE = "index.db"
@@ -34,7 +34,7 @@ class ConfigDirError(ValueError):
 
 @dataclass(frozen=True)
 class SelectedDir:
-    """A directory and where it was chosen: a flag, an argument, the environment or the default."""
+    """A directory on disk and where it was chosen: a flag, an argument, the environment or the default."""
 
     path: str
     source: str
@@ -43,8 +43,41 @@ class SelectedDir:
         return os.path.join(self.path, name)
 
 
-def _select_dir(explicit: str | None, explicit_source: str, env: str, default: str) -> SelectedDir:
-    """Apply the precedence: ``explicit``, then ``env`` if it's set and not empty, then ``default``.
+@dataclass(frozen=True)
+class ConfigDir:
+    """The configuration directory and where it was chosen.
+
+    ``location`` is the packaged defaults, read with :mod:`importlib.resources`, or a directory on
+    disk that a flag, an argument or the environment named.
+    """
+
+    location: Traversable
+    source: str
+
+    @property
+    def is_packaged(self) -> bool:
+        return self.source == PACKAGED_CONFIG_SOURCE
+
+    def file(self, name: str) -> Traversable:
+        return self.location / name
+
+
+# A configuration file to read: a path, or a file in a configuration directory.
+ConfigFile = str | Traversable
+
+
+def as_traversable(file: ConfigFile) -> Traversable:
+    """Return ``file`` as something to open, turning a path into a :class:`~pathlib.Path`."""
+    return Path(file) if isinstance(file, str) else file
+
+
+def packaged_config_dir() -> Traversable:
+    """Return the default configuration installed with the package."""
+    return files("rfc_qa") / "config"
+
+
+def _selected_path(explicit: str | None, explicit_source: str, env: str) -> SelectedDir | None:
+    """Apply the precedence ``explicit``, then ``env`` if it's set and not empty, or return ``None``.
 
     A relative explicit or environment path resolves from the working directory.
     """
@@ -52,23 +85,34 @@ def _select_dir(explicit: str | None, explicit_source: str, env: str, default: s
         return SelectedDir(os.path.abspath(explicit), explicit_source)
     if os.environ.get(env):
         return SelectedDir(os.path.abspath(os.environ[env]), env)
-    return SelectedDir(default, "default")
+    return None
 
 
-def resolve_config_dir(explicit: str | None = None, explicit_source: str = "--config-dir") -> SelectedDir:
+def resolve_config_dir(explicit: str | None = None, explicit_source: str = "--config-dir") -> ConfigDir:
     """Return the configuration directory to use, raising :class:`ConfigDirError` if it's missing.
 
     The order is ``explicit``, then ``RFC_QA_CONFIG_DIR`` if it's set and not empty, then the
-    default.
+    packaged defaults. A selected directory has to provide every file it's asked for: the packaged
+    defaults don't fill gaps.
     """
-    config_dir = _select_dir(explicit, explicit_source, CONFIG_DIR_ENV, DEFAULT_CONFIG_DIR)
-    if not os.path.isdir(config_dir.path):
+    selected = _selected_path(explicit, explicit_source, CONFIG_DIR_ENV)
+    if selected is None:
+        return ConfigDir(packaged_config_dir(), PACKAGED_CONFIG_SOURCE)
+    if not os.path.isdir(selected.path):
         raise ConfigDirError(
             "Configuration directory {p!r} (from {s}) doesn't exist.".format(
-                p=config_dir.path, s=config_dir.source
+                p=selected.path, s=selected.source
             )
         )
-    return config_dir
+    return ConfigDir(Path(selected.path), selected.source)
+
+
+def default_data_dir() -> str:
+    """Return the user's data directory for rfc-qa on this platform, such as ``~/.local/share/rfc-qa``.
+
+    It's looked up on each call, so a change to the environment, such as ``XDG_DATA_HOME``, applies.
+    """
+    return platformdirs.user_data_dir(APP_NAME, appauthor=False)
 
 
 def resolve_data_dir(explicit: str | None = None, explicit_source: str = "--data-dir") -> SelectedDir:
@@ -78,4 +122,6 @@ def resolve_data_dir(explicit: str | None = None, explicit_source: str = "--data
     default. The directory isn't required to exist: ingestion creates it, and a query or search
     reports the missing index.
     """
-    return _select_dir(explicit, explicit_source, DATA_DIR_ENV, DEFAULT_DATA_DIR)
+    return _selected_path(explicit, explicit_source, DATA_DIR_ENV) or SelectedDir(
+        default_data_dir(), "default"
+    )

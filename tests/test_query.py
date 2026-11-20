@@ -7,7 +7,6 @@ from rfc_qa import paths, query
 from rfc_qa.chunk import Chunk
 from rfc_qa.generation import answer_generator
 from rfc_qa.generation.answer_generator import ModelResponseError, ModelUnavailableError
-from rfc_qa.paths import REPO_ROOT
 from rfc_qa.query import QueryErrorCode, QueryResponse, Timings, load_query_config, main
 from rfc_qa.query import query as run_query
 from rfc_qa.retrieval.keyword_index import build_index
@@ -116,7 +115,7 @@ def setup(tmp_path, monkeypatch, data_dir):
 
 
 def test_real_config_loads():
-    config = load_query_config(os.path.join(paths.DEFAULT_CONFIG_DIR, "query.json"))
+    config = load_query_config(paths.packaged_config_dir() / "query.json")
     assert config.model.model == "llama3.2"
     assert config.retrieval_limit == 5
 
@@ -133,10 +132,10 @@ def _spy_on_config_path(monkeypatch):
     return read
 
 
-def test_default_config_is_in_the_config_directory(monkeypatch):
+def test_default_config_is_the_packaged_configuration(monkeypatch):
     read = _spy_on_config_path(monkeypatch)
     run_query("What does 404 mean?")
-    assert read == [os.path.join(paths.DEFAULT_CONFIG_DIR, "query.json")]
+    assert [str(path) for path in read] == [str(paths.packaged_config_dir() / "query.json")]
 
 
 def test_config_dir_argument_over_environment(tmp_path, monkeypatch):
@@ -145,14 +144,14 @@ def test_config_dir_argument_over_environment(tmp_path, monkeypatch):
     monkeypatch.setenv(paths.CONFIG_DIR_ENV, str(tmp_path / "env"))
     read = _spy_on_config_path(monkeypatch)
     run_query("What does 404 mean?", config_dir=str(tmp_path / "argument"))
-    assert read == [str(tmp_path / "argument" / "query.json")]
+    assert [str(path) for path in read] == [str(tmp_path / "argument" / "query.json")]
 
 
 def test_environment_over_default(tmp_path, monkeypatch):
     monkeypatch.setenv(paths.CONFIG_DIR_ENV, str(tmp_path))
     read = _spy_on_config_path(monkeypatch)
     run_query("What does 404 mean?")
-    assert read == [str(tmp_path / "query.json")]
+    assert [str(path) for path in read] == [str(tmp_path / "query.json")]
 
 
 @pytest.mark.parametrize("use_env, source", [(False, "config_dir argument"), (True, "RFC_QA_CONFIG_DIR")])
@@ -169,6 +168,13 @@ def test_missing_config_dir_is_a_config_error(tmp_path, monkeypatch, use_env, so
     assert source in response.error_string
 
 
+def test_selected_directory_without_query_config_does_not_use_the_packaged_copy(tmp_path):
+    response = run_query("What does 404 mean?", config_dir=str(tmp_path))
+    assert (response.success, response.error_code) == (False, QueryErrorCode.CONFIG_INVALID)
+    assert response.error_string is not None
+    assert str(tmp_path / "query.json") in response.error_string
+
+
 def _spy_on_index_path(monkeypatch):
     """Record the index path a query is answered from, stopping the query there."""
     used = []
@@ -180,7 +186,7 @@ def test_default_data_directory(tmp_path, monkeypatch):
     _write_config(tmp_path, CONFIG, monkeypatch)
     used = _spy_on_index_path(monkeypatch)
     run_query("What does 404 mean?")
-    assert used == [os.path.join(REPO_ROOT, "data", "index.db")]
+    assert used == [os.path.join(paths.default_data_dir(), "index.db")]
 
 
 def test_data_directory_from_the_environment(tmp_path, monkeypatch):

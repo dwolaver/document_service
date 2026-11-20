@@ -135,19 +135,19 @@ def _section(data: dict[str, Any], name: str) -> dict[str, Any]:
     return section
 
 
-def load_query_config(path: str) -> QueryConfig:
+def load_query_config(path: paths.ConfigFile) -> QueryConfig:
     """Return the validated configuration, raising :class:`QueryConfigError` if it's invalid.
 
     ``OLLAMA_BASE_URL``, when set and not empty, replaces ``llm.base_url``. The file must still give
     a valid ``llm.base_url``, so that it stays complete on its own.
     """
     try:
-        with open(path, encoding="utf-8") as config_file:
+        with paths.as_traversable(path).open(encoding="utf-8") as config_file:
             data = json.load(config_file)
     except (OSError, ValueError) as exc:
-        raise QueryConfigError("Failed to read {p!r}: {e}".format(p=path, e=exc)) from exc
+        raise QueryConfigError("Failed to read {p!r}: {e}".format(p=str(path), e=exc)) from exc
     if not isinstance(data, dict):
-        raise QueryConfigError("Config {p!r} must be a JSON object.".format(p=path))
+        raise QueryConfigError("Config {p!r} must be a JSON object.".format(p=str(path)))
 
     retrieval = _section(data, "retrieval")
     llm = _section(data, "llm")
@@ -283,9 +283,9 @@ def query(user_query: str, *, config_dir: str | None = None, data_dir: str | Non
     """Answer a natural-language query about RFCs.
 
     The query configuration is read from ``config_dir`` if given, then from the directory named by
-    ``RFC_QA_CONFIG_DIR``, then from ``config/`` at the repository root. The index is ``index.db`` in
-    ``data_dir`` if given, then in the directory named by ``RFC_QA_DATA_DIR``, then in ``data/`` at
-    the repository root.
+    ``RFC_QA_CONFIG_DIR``, then from the defaults installed with the package. The index is
+    ``index.db`` in ``data_dir`` if given, then in the directory named by ``RFC_QA_DATA_DIR``, then in
+    the user's data directory for rfc-qa, such as ``~/.local/share/rfc-qa`` on Linux.
 
     Returns a :class:`QueryResponse`. Expected failures, such as invalid input, a missing index or an
     unavailable model, are reported through the response rather than raised.
@@ -335,14 +335,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("query", help="The natural-language query to answer.")
     parser.add_argument(
         "--config-dir",
-        help="Directory holding {q}. Defaults to ${e}, then config/ at the repository root.".format(
+        help="Directory holding {q}. Defaults to ${e}, then the packaged defaults.".format(
             q=paths.QUERY_CONFIG_FILE, e=paths.CONFIG_DIR_ENV
         ),
     )
     parser.add_argument(
         "--data-dir",
-        help="Directory holding {i}. Defaults to ${e}, then data/ at the repository root.".format(
-            i=paths.INDEX_FILE, e=paths.DATA_DIR_ENV
+        help="Directory holding {i}. Defaults to ${e}, then the user data directory ({d}).".format(
+            i=paths.INDEX_FILE, e=paths.DATA_DIR_ENV, d=paths.default_data_dir()
         ),
     )
     args = parser.parse_args(argv)
@@ -355,7 +355,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     data_dir = paths.resolve_data_dir(args.data_dir)
 
-    response = query(args.query, config_dir=config_dir.path, data_dir=data_dir.path)
+    # The packaged defaults have no path to pass on, and query() selects them the same way.
+    selected_config_dir = None if config_dir.is_packaged else str(config_dir.location)
+    response = query(args.query, config_dir=selected_config_dir, data_dir=data_dir.path)
     if response.success:
         _print_success(response)
         return 0

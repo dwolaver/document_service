@@ -49,7 +49,7 @@ These decisions were mine, and they shaped the result:
 - **Never using a partial download.** I asked for the RFC downloader to check each download before
   keeping it and to write files atomically. It rejects an empty body, a body shorter than its
   `Content-Length`, or text that doesn't identify itself as the requested RFC. Then it writes to a
-  temporary file and renames it into place. Ingestion reuses any RFC file already in `data/`, so an
+  temporary file and renames it into place. Ingestion reuses any RFC file already in the data directory, so an
   interrupted download never leaves a broken file to be indexed later.
 - **The problem worth solving.** I scoped the corpus to HTTP, TLS and TCP, and chose status-aware
   retrieval as the goal, so that answers don't rely on RFCs that have been replaced. That's why the
@@ -115,15 +115,21 @@ pytest
 `requirements-dev.txt` installs the project in editable mode, which provides the `rfc-ingest`,
 `rfc-query` and `rfc-search` commands. After pulling a change to `pyproject.toml`, run the `pip
 install` line again. The code lives in the `rfc_qa` package in `src/`, with a subpackage each for
-ingestion, retrieval and generation. Configuration lives in `config/` and generated data in `data/`,
-both at the repository root by default, and the commands find them there from any directory.
+ingestion, retrieval and generation. The default configuration is in `src/rfc_qa/config/`, and
+generated data goes in the user data directory, as described in [Building the
+index](#building-the-index). The commands find both from any directory.
 
 The package is only imported as installed, never from the checkout. The commands, the tests and
-module runs such as `python -m rfc_qa.query` all need the editable install. An install made before
-the package moved to `src/` still points at the old `rfc_qa/` directory, so run the `pip install` line
-again once after pulling that change.
+module runs such as `python -m rfc_qa.query` all need an install, editable or regular. An install
+made before the package moved to `src/` still points at the old `rfc_qa/` directory, so run the `pip
+install` line again once after pulling that change.
 
-The network integration test is skipped unless `RFC_DOWNLOADER_NETWORK_TESTS=1` is set.
+The network integration test is skipped unless `RFC_DOWNLOADER_NETWORK_TESTS=1` is set. The
+real-model test is skipped unless `OLLAMA_TESTS=1` is set. It needs Ollama with `llama3.2`, and an
+index in the default data directory, or in the one `RFC_QA_DATA_DIR` names. The install tests are
+skipped unless `RFC_QA_INSTALL_TESTS=1` is set. They build a wheel, install it with its dependencies
+into a fresh virtual environment, and run the three commands from an empty directory, so they need
+access to PyPI. CI runs them.
 
 The code is linted and formatted with [ruff](https://docs.astral.sh/ruff/) and type-checked with
 [mypy](https://mypy-lang.org/), both configured in `pyproject.toml`. A pre-commit hook runs these
@@ -175,11 +181,30 @@ adds or modifies files in an active OpenSpec change, so it's expected to fail du
 change has work that can only happen after merge, the `merge-before-archive` label passes this
 check. It doesn't affect any other check, so the tests must still pass.
 
+## Installing
+
+To use the commands without working on the code, install the project normally into a virtual
+environment on Python 3.14, either from a clone or from a wheel built from one:
+
+```
+pip install .
+```
+
+```
+pip wheel --no-deps -w dist .
+pip install dist/rfc_qa-0.1.0-py3-none-any.whl
+```
+
+The commands then work from any directory, and the clone can be removed: the default configuration
+is installed with the package, and generated data goes in the user data directory.
+
 ## Building the index
 
-Ingestion downloads any missing RFCs into the data directory, `data/` by default, then builds the
-search index there as `index.db`. The first run needs network access to rfc-editor.org. `data/` is
-generated, so it isn't committed.
+Ingestion downloads any missing RFCs into the data directory, then builds the search index there as
+`index.db`. By default the data directory is your user data directory for `rfc-qa`:
+`~/.local/share/rfc-qa` on Linux (or under `$XDG_DATA_HOME` if that's set), `~/Library/Application
+Support/rfc-qa` on macOS and `%LOCALAPPDATA%\rfc-qa` on Windows. `--help` shows the path for your
+system. The first run needs network access to rfc-editor.org.
 
 ```
 rfc-ingest
@@ -196,9 +221,9 @@ rfc-search "Content-Length" --limit 3
 as described below. `--index` names a single index file instead, and takes precedence over the data
 directory.
 
-Configuration lives in [`config/`](config). [`config/corpus.json`](config/corpus.json) lists the
-RFCs, with their family and title. [`config/ingest.json`](config/ingest.json) sets the chunk size
-limit:
+The default configuration ships inside the package, in [`src/rfc_qa/config/`](src/rfc_qa/config).
+[`corpus.json`](src/rfc_qa/config/corpus.json) lists the RFCs, with their family and title.
+[`ingest.json`](src/rfc_qa/config/ingest.json) sets the chunk size limit:
 
 - `embedding_model` is the embedding model and its token limit, which is the hard ceiling.
 - `target_chunk_tokens` is the chunk size to aim for inside that ceiling.
@@ -210,9 +235,20 @@ records the configuration that built it.
 
 To read the configuration from another directory, such as a mounted folder in a container, name it
 with `--config-dir` or the `RFC_QA_CONFIG_DIR` environment variable. The flag wins over the
-variable, and both win over `config/`. A relative path resolves from the working directory, and an
-empty variable counts as unset. `--corpus` and `--config` name a single manifest or ingestion
-configuration file instead, and take precedence over the directory for that file.
+variable, and both win over the packaged defaults. A relative path resolves from the working
+directory, and an empty variable counts as unset. A selected directory has to hold every file the
+command reads: a missing file is an error, and the packaged copy isn't used instead. `--corpus` and
+`--config` name a single manifest or ingestion configuration file instead, and take precedence over
+the directory for that file.
+
+In an editable install, the packaged defaults are the files in `src/rfc_qa/config/`, so edit them
+there. After a regular install they're inside the installed package, which shouldn't be edited. Copy
+them into a directory of your own and select it:
+
+```
+cp -r "$(python -c 'from importlib.resources import files; print(files("rfc_qa") / "config")')" my-config
+rfc-ingest --config-dir my-config
+```
 
 ```
 RFC_QA_CONFIG_DIR=/srv/rfc-qa/config rfc-ingest
@@ -222,7 +258,7 @@ rfc-ingest --config-dir staging --corpus small-corpus.json
 Generated data goes in one data directory: the downloaded RFCs in its `rfcs/` folder and the index in
 `index.db`. To put it somewhere else, such as a mounted volume, name the directory with `--data-dir`
 or the `RFC_QA_DATA_DIR` environment variable. The precedence is the same as for configuration: the
-flag, then the variable, then `data/` at the repository root. `rfc-ingest` creates the directory if
+flag, then the variable, then the user data directory. `rfc-ingest` creates the directory if
 it doesn't exist. `rfc-query` and `rfc-search` choose their data directory the same way, so they read
 the index that `rfc-ingest` built there.
 
@@ -231,8 +267,16 @@ RFC_QA_DATA_DIR=/srv/rfc-qa/data rfc-ingest
 rfc-ingest --data-dir scratch
 ```
 
+The default used to be `data/` at the repository root. To keep using RFCs and an index from there,
+move the folder to the user data directory, or keep it where it is and select it:
+
+```
+mv data ~/.local/share/rfc-qa
+export RFC_QA_DATA_DIR="$PWD/data"
+```
+
 A configuration directory that doesn't exist stops the run before anything is downloaded, with a
-message naming the directory and whether it came from the flag, the variable or the default.
+message naming the directory and whether it came from the flag or the variable.
 
 ## Asking a question
 
@@ -260,7 +304,7 @@ on the first question after it has been idle, which takes a few seconds, and the
 that happened. From Python, `rfc_qa.query.query()` returns the same result, with timings and a
 `cold_start` flag, so that slow first answers can be left out of performance figures.
 
-[`config/query.json`](config/query.json) sets the model, the Ollama address, the context window,
+[`query.json`](src/rfc_qa/config/query.json) sets the model, the Ollama address, the context window,
 the answer length limit, the request timeout and how many passages to retrieve. A query fails before
 calling the model if those passages and the answer wouldn't fit in the context window. The index
 location isn't a setting: it's always `index.db` in the data directory.
@@ -274,12 +318,12 @@ shows when a leftover variable is redirecting queries.
 OLLAMA_BASE_URL=http://ollama:11434 rfc-query "What does a 404 status code mean?"
 ```
 
-`rfc-query` reads its configuration from `--config-dir`, then `RFC_QA_CONFIG_DIR`, then `config/`,
-and its index from `--data-dir`, then `RFC_QA_DATA_DIR`, then `data/`, in the same way as
-`rfc-ingest`. From Python, `query(question, config_dir=..., data_dir=...)` takes either directory
-ahead of its variable. A configuration directory that doesn't exist gives a configuration error naming
-it and where it was set. A data directory without an index gives the index error, which names the
-index path and says to run `rfc-ingest`.
+`rfc-query` reads its configuration from `--config-dir`, then `RFC_QA_CONFIG_DIR`, then the packaged
+defaults, and its index from `--data-dir`, then `RFC_QA_DATA_DIR`, then the user data directory, in
+the same way as `rfc-ingest`. From Python, `query(question, config_dir=..., data_dir=...)` takes
+either directory ahead of its variable. A configuration directory that doesn't exist gives a
+configuration error naming it and where it was set. A data directory without an index gives the
+index error, which names the index path and says to run `rfc-ingest`.
 
 ```
 rfc-query --config-dir staging "What does a 404 status code mean?"

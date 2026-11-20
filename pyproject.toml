@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 license = "MIT"
 license-files = ["LICENSE"]
-dependencies = ["requests"]
+dependencies = ["platformdirs", "requests"]
 
 [project.scripts]
 rfc-ingest = "rfc_qa.ingestion.ingest:main"
@@ -20,6 +20,10 @@ rfc-search = "rfc_qa.retrieval.keyword_index:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["rfc_qa*"]
+
+# The default configuration ships inside the package and is read with importlib.resources.
+[tool.setuptools.package-data]
+rfc_qa = ["config/*.json"]
 
 [tool.ruff]
 line-length = 110

@@ -4,7 +4,7 @@ from importlib import metadata
 
 import pytest
 
-from rfc_qa.paths import REPO_ROOT
+from tests.conftest import REPO_ROOT
 
 COMMANDS = {
     "rfc-ingest": "rfc_qa.ingestion.ingest:main",
@@ -37,6 +37,16 @@ def test_each_command_loads_to_a_callable(name):
 def test_no_service_modules_at_the_repository_root():
     root_modules = {name for name in os.listdir(REPO_ROOT) if name.endswith(".py")}
     assert root_modules <= ROOT_MODULE_ALLOW_LIST
+
+
+def test_repo_root_is_the_repository_root():
+    assert os.path.isfile(os.path.join(REPO_ROOT, "pyproject.toml"))
+    assert os.path.isdir(os.path.join(REPO_ROOT, "src", "rfc_qa"))
+
+
+def test_no_configuration_at_the_repository_root():
+    for name in ("config", "corpus.json", "ingest_config.json", "query_config.json"):
+        assert not os.path.exists(os.path.join(REPO_ROOT, name))
 
 
 @pytest.mark.parametrize(
