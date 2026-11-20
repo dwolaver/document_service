@@ -24,7 +24,7 @@
 
 - [x] 5.1 Add `tests/test_install.py`, marked `install` (registered in `pytest.ini`), skipped unless `RFC_QA_INSTALL_TESTS=1`, following the design. Mention the variable in the README's Development section. Verify it passes with the variable set and is skipped without it
 - [x] 5.2 Verify that the test catches the failures in the continuous-integration spec. With the `package-data` line removed, it fails because the configuration is missing. With the packaged default temporarily pointed at a checkout path, it fails. Restore both and confirm it passes
-- [ ] 5.3 Set `RFC_QA_INSTALL_TESTS: "1"` on the `test` job's test step in `.github/workflows/ci.yml`. Verify on the pull request that the `test` job runs the install test rather than skipping it
+- [x] 5.3 Set `RFC_QA_INSTALL_TESTS: "1"` on the `test` job's test step in `.github/workflows/ci.yml`. Verify on the pull request that the `test` job runs the install test rather than skipping it
 
 ## 6. Verification
 
