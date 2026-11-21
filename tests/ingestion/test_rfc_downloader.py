@@ -1,3 +1,4 @@
+import logging
 import os
 import tempfile
 
@@ -227,3 +228,41 @@ def test_real_download_passes_verification(tmp_path):
     content = (tmp_path / "rfc791.txt").read_bytes()
     assert content
     assert b"791" in content[:4096]
+
+
+# --- Logging ---
+
+
+def _records(caplog):
+    return [
+        (r.levelno, r.getMessage()) for r in caplog.records if r.name == "rfc_qa.ingestion.rfc_downloader"
+    ]
+
+
+def test_download_is_logged(monkeypatch, tmp_path, caplog):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY))}))
+    path = download_rfc(9110, str(tmp_path))
+    assert _records(caplog) == [
+        (logging.INFO, "Downloading RFC 9110 from https://www.rfc-editor.org/rfc/rfc9110.txt"),
+        (logging.DEBUG, f"Stored {len(MODERN_BODY)} bytes of RFC 9110 at {path!r}"),
+    ]
+
+
+def test_stored_rfc_is_logged_without_a_download(monkeypatch, tmp_path, caplog):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    (tmp_path / "rfc9110.txt").write_bytes(b"already here")
+    _fail_if_called(monkeypatch)
+    path = download_rfc(9110, str(tmp_path))
+    assert _records(caplog) == [(logging.DEBUG, f"RFC 9110 is already stored at {path!r}")]
+
+
+def test_failed_download_is_raised_not_logged(monkeypatch, tmp_path, caplog):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    _patch_get(monkeypatch, FakeResponse(404, b"404 - Not found"))
+    with pytest.raises(DownloadError) as excinfo:
+        download_rfc(9110, str(tmp_path))
+    assert _records(caplog) == [
+        (logging.INFO, "Downloading RFC 9110 from https://www.rfc-editor.org/rfc/rfc9110.txt")
+    ]
+    assert all(str(excinfo.value) not in record.getMessage() for record in caplog.records)

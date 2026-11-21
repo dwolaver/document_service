@@ -6,6 +6,7 @@ passage supports the answer, which the golden question set measures separately.
 """
 
 import json
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -14,6 +15,8 @@ import requests
 
 from rfc_qa.chunk import Chunk
 from rfc_qa.errors import ModelResponseError, ModelUnavailableError
+
+logger = logging.getLogger(__name__)
 
 NOT_FOUND_ANSWER = "The indexed RFCs don't answer this question."
 
@@ -105,6 +108,7 @@ def _ollama_error(response: requests.Response) -> str:
 
 def _call_model(question: str, chunks: Sequence[Chunk], settings: ModelSettings) -> dict[str, Any]:
     url = settings.base_url.rstrip("/") + "/api/chat"
+    logger.debug("Asking model %r at %s with %d passages", settings.model, url, len(chunks))
     try:
         response = _post_chat(url, _request_body(question, chunks, settings), settings.timeout_seconds)
     except requests.Timeout as exc:
@@ -194,7 +198,7 @@ def generate_answer(question: str, chunks: Sequence[Chunk], settings: ModelSetti
     is_answered = found and bool(cited) and bool(answer.strip())
 
     generation_ns = [payload.get("prompt_eval_duration"), payload.get("eval_duration")]
-    return GenerationResult(
+    result = GenerationResult(
         found=is_answered,
         answer=answer.strip() if is_answered else None,
         cited=cited if is_answered else [],
@@ -205,3 +209,11 @@ def generate_answer(question: str, chunks: Sequence[Chunk], settings: ModelSetti
         prompt_tokens=prompt_tokens if isinstance(prompt_tokens, int) else None,
         answer_tokens=payload.get("eval_count") if isinstance(payload.get("eval_count"), int) else None,
     )
+    logger.debug(
+        "Model reported %s prompt tokens and %s answer tokens, loaded in %s ms, generated in %s ms",
+        result.prompt_tokens,
+        result.answer_tokens,
+        result.model_load_ms,
+        result.generation_ms,
+    )
+    return result

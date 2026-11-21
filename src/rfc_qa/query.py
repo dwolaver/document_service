@@ -7,6 +7,7 @@ answer from them, and returns the answer with checked citations and timings.
 
 import argparse
 import json
+import logging
 import os
 import sys
 import time
@@ -17,7 +18,7 @@ from typing import Any
 
 from rfc_qa import paths
 from rfc_qa.chunk import Chunk
-from rfc_qa.cli import report_error
+from rfc_qa.cli import add_verbose_argument, configure_logging, report_error
 from rfc_qa.errors import (
     ConfigError,
     IndexUnavailableError,
@@ -32,6 +33,8 @@ from rfc_qa.generation.answer_generator import (
     generate_answer,
 )
 from rfc_qa.retrieval.keyword_index import read_metadata, search
+
+logger = logging.getLogger(__name__)
 
 # When set and not empty, replaces the configured llm.base_url.
 OLLAMA_BASE_URL_ENV = "OLLAMA_BASE_URL"
@@ -207,6 +210,7 @@ def _chunk_token_target(index_path: str) -> int:
 
 def _budget_error(config: QueryConfig, chunk_tokens: int) -> str | None:
     needed = config.retrieval_limit * chunk_tokens + PROMPT_ALLOWANCE_TOKENS + config.model.max_answer_tokens
+    logger.debug("Context budget: %d of %d tokens (llm.num_ctx)", needed, config.model.num_ctx)
     if needed <= config.model.num_ctx:
         return None
     return (
@@ -225,9 +229,11 @@ def _citation(chunk: Chunk) -> Citation:
 def _retrieve(clock: _Clock, index_path: str, user_query: str, limit: int) -> list[Chunk]:
     start = time.perf_counter()
     try:
-        return [result.chunk for result in search(index_path, user_query, limit)]
+        chunks = [result.chunk for result in search(index_path, user_query, limit)]
     finally:
         clock.retrieval_ms = _elapsed_ms(start)
+    logger.info("Retrieved %d passages in %d ms", len(chunks), clock.retrieval_ms)
+    return chunks
 
 
 def _answer(user_query: str, config: QueryConfig, index_path: str) -> QueryResponse:
@@ -239,6 +245,7 @@ def _answer(user_query: str, config: QueryConfig, index_path: str) -> QueryRespo
         chunks = _retrieve(clock, index_path, user_query, config.retrieval_limit)
         if not chunks:
             return _not_found(clock.timings())
+        model_start = time.perf_counter()
         generation = generate_answer(user_query, chunks, config.model)
     except IndexUnavailableError as exc:
         return _failure(QueryErrorCode.INDEX_UNAVAILABLE, str(exc), clock.timings())
@@ -248,8 +255,13 @@ def _answer(user_query: str, config: QueryConfig, index_path: str) -> QueryRespo
         return _failure(QueryErrorCode.MODEL_INVALID_RESPONSE, str(exc), clock.timings())
 
     timings = clock.timings(generation)
+    model_ms = _elapsed_ms(model_start)
     if not generation.found:
+        logger.info("The model found no answer in the passages, in %d ms", model_ms)
         return _not_found(timings)
+    logger.info(
+        "The model answered in %d ms, citing %d of %d passages", model_ms, len(generation.cited), len(chunks)
+    )
     return QueryResponse(
         success=True,
         answer=generation.answer,
@@ -281,11 +293,14 @@ def query(user_query: str, *, config_dir: str | None = None, data_dir: str | Non
         )
     try:
         directory = paths.resolve_config_dir(config_dir, explicit_source="config_dir argument")
-        config = load_query_config(directory.file(paths.QUERY_CONFIG_FILE))
+        config_file = directory.file(paths.QUERY_CONFIG_FILE)
+        config = load_query_config(config_file)
     except ConfigError as exc:
         return _failure(QueryErrorCode.CONFIG_INVALID, str(exc))
+    logger.debug("Query configuration %r", str(config_file))
     selected_data_dir = paths.resolve_data_dir(data_dir, explicit_source="data_dir argument")
     index_path = selected_data_dir.file(paths.INDEX_FILE)
+    logger.debug("Index %r", index_path)
     return _answer(user_query, config, index_path)
 
 
@@ -321,7 +336,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         help=f"Directory holding {paths.INDEX_FILE}. Defaults to ${paths.DATA_DIR_ENV}, then the user data "
         f"directory ({default_data_dir}).",
     )
+    add_verbose_argument(parser)
     args = parser.parse_args(argv)
+    configure_logging(args.verbose)
 
     # Resolved here, not in query(), so an error names the flag the user typed.
     try:

@@ -1,4 +1,6 @@
+import logging
 import os
+import re
 
 import pytest
 
@@ -33,3 +35,29 @@ def _isolated_default_data_dir(tmp_path_factory, monkeypatch):
 def real_default_data_dir(monkeypatch):
     """Restore the real default lookup, for tests that only compare its paths and never write there."""
     monkeypatch.setattr(paths, "default_data_dir", REAL_DEFAULT_DATA_DIR)
+
+
+@pytest.fixture(autouse=True)
+def _restore_package_logger():
+    """Undo any level, handler or propagation change a test or a command makes to the rfc_qa logger."""
+    logger = logging.getLogger("rfc_qa")
+    saved = (logger.level, list(logger.handlers), logger.propagate)
+    yield
+    logger.setLevel(saved[0])
+    logger.handlers[:] = saved[1]
+    logger.propagate = saved[2]
+
+
+LOG_LINE = re.compile(r"(INFO|DEBUG|WARNING) rfc_qa(\.\w+)*: .+")
+
+
+def split_stderr(err):
+    """Split a command's stderr into its log-record levels and its other lines."""
+    levels, other = [], []
+    for line in err.splitlines():
+        match = LOG_LINE.fullmatch(line)
+        if match:
+            levels.append(match.group(1))
+        else:
+            other.append(line)
+    return levels, other

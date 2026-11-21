@@ -1,3 +1,4 @@
+import logging
 import os
 import sqlite3
 
@@ -8,6 +9,7 @@ from rfc_qa.chunk import Chunk
 from rfc_qa.errors import IndexBuildError, IndexUnavailableError
 from rfc_qa.retrieval import keyword_index
 from rfc_qa.retrieval.keyword_index import build_index, main, read_metadata, search
+from tests.conftest import split_stderr
 
 METADATA = {"embedding_model_name": "nomic-embed-text", "max_chunk_chars": 2970}
 
@@ -273,3 +275,73 @@ def test_cli_data_dir_without_an_index(tmp_path, capsys):
 
 def test_long_excerpts_are_shortened():
     assert keyword_index._excerpt("word " * 100).endswith("...")
+
+
+# --- Logging ---
+
+
+def _index_records(caplog):
+    return [(r.levelno, r.getMessage()) for r in caplog.records if r.name == "rfc_qa.retrieval.keyword_index"]
+
+
+def test_build_is_logged(tmp_path, caplog):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    path = str(tmp_path / "index.db")
+    build_index(iter(CHUNKS), METADATA, path)
+    assert _index_records(caplog) == [(logging.INFO, f"Writing 4 chunks to the index at {path!r}")]
+    assert len(search(path, "handshake", 10)) == 2
+
+
+@pytest.mark.parametrize("text, limit, count", [("handshake", 10, 2), ("zzzzqqqq", 5, 0), ("!!!", 5, 0)])
+def test_search_is_logged(index_path, caplog, text, limit, count):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    search(index_path, text, limit)
+    assert _index_records(caplog) == [
+        (logging.DEBUG, f"Searched {index_path!r} for {text!r} (limit {limit}): {count} results")
+    ]
+
+
+def test_missing_index_is_raised_not_logged(tmp_path, caplog):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    with pytest.raises(IndexUnavailableError) as excinfo:
+        search(str(tmp_path / "missing.db"), "handshake")
+    assert _index_records(caplog) == []
+    assert all(str(excinfo.value) not in record.getMessage() for record in caplog.records)
+
+
+# --- -v ---
+
+
+def test_cli_is_quiet_without_v(index_path, capsys):
+    assert main(["handshake", "--index", index_path]) == 0
+    assert capsys.readouterr().err == ""
+
+
+def test_cli_v_leaves_output_unchanged_and_shows_no_detail(index_path, capsys):
+    assert main(["handshake", "--index", index_path]) == 0
+    quiet_out = capsys.readouterr().out
+    assert main(["handshake", "--index", index_path, "-v"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == quiet_out
+    # A search logs only detail, so -v adds nothing.
+    assert captured.err == ""
+
+
+def test_cli_vv_shows_the_search(index_path, capsys):
+    assert main(["handshake", "--index", index_path, "-vv"]) == 0
+    captured = capsys.readouterr()
+    levels, other = split_stderr(captured.err)
+    assert other == [] and set(levels) == {"DEBUG"}
+    assert f"Searched {index_path!r} for 'handshake' (limit 5): 2 results" in captured.err
+
+
+def test_cli_vv_failure_ends_with_the_error_once(tmp_path, capsys):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert main(["handshake", "--data-dir", str(empty), "-vv"]) == 1
+    captured = capsys.readouterr()
+    message = f"Index not found: {str(empty / 'index.db')!r}. Run rfc-ingest to build it."
+    levels, other = split_stderr(captured.err)
+    assert levels == ["DEBUG"] and other == [message]
+    assert captured.err.endswith(message + "\n")
+    assert captured.out == ""

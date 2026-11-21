@@ -7,6 +7,7 @@ Generated data (downloaded RFCs and the index) lives in one data directory, whic
 user's data directory for rfc-qa and can be overridden by a flag or ``RFC_QA_DATA_DIR``.
 """
 
+import logging
 import os
 from dataclasses import dataclass
 from importlib.resources import files
@@ -16,6 +17,8 @@ from pathlib import Path
 import platformdirs
 
 from rfc_qa.errors import ConfigError
+
+logger = logging.getLogger(__name__)
 
 CONFIG_DIR_ENV = "RFC_QA_CONFIG_DIR"
 CORPUS_FILE = "corpus.json"
@@ -95,12 +98,15 @@ def resolve_config_dir(explicit: str | None = None, explicit_source: str = "--co
     """
     selected = _selected_path(explicit, explicit_source, CONFIG_DIR_ENV)
     if selected is None:
-        return ConfigDir(packaged_config_dir(), PACKAGED_CONFIG_SOURCE)
-    if not os.path.isdir(selected.path):
+        directory = ConfigDir(packaged_config_dir(), PACKAGED_CONFIG_SOURCE)
+    elif not os.path.isdir(selected.path):
         raise ConfigError(
             f"Configuration directory {selected.path!r} (from {selected.source}) doesn't exist."
         )
-    return ConfigDir(Path(selected.path), selected.source)
+    else:
+        directory = ConfigDir(Path(selected.path), selected.source)
+    logger.debug("Configuration directory %r (from %s)", str(directory.location), directory.source)
+    return directory
 
 
 def default_data_dir() -> str:
@@ -118,6 +124,8 @@ def resolve_data_dir(explicit: str | None = None, explicit_source: str = "--data
     default. The directory isn't required to exist: ingestion creates it, and a query or search
     reports the missing index.
     """
-    return _selected_path(explicit, explicit_source, DATA_DIR_ENV) or SelectedDir(
+    selected = _selected_path(explicit, explicit_source, DATA_DIR_ENV) or SelectedDir(
         default_data_dir(), "default"
     )
+    logger.debug("Data directory %r (from %s)", selected.path, selected.source)
+    return selected

@@ -366,6 +366,49 @@ The commands print an error's message as one line on standard error and exit wit
 other exception is a bug, so it isn't caught and shows its traceback. A command-line mistake, such as
 an unknown option, prints the usage message and exits with status 2.
 
+## Seeing what the library is doing
+
+Each command takes `-v` to show its progress on standard error, and `-vv` to show details as well,
+such as the directories it chose and where each choice came from. Standard output stays the same, so
+`-v` can be added to a command whose output is piped somewhere. Without the flag, nothing extra is
+printed.
+
+```
+$ rfc-ingest -v --data-dir /srv/rfc-qa
+INFO rfc_qa.ingestion.ingest: 59 RFCs in the manifest '.../rfc_qa/config/corpus.json'
+INFO rfc_qa.ingestion.rfc_downloader: Downloading RFC 9110 from https://www.rfc-editor.org/rfc/rfc9110.txt
+INFO rfc_qa.ingestion.ingest: Chunked 59 RFCs into 5261 chunks
+INFO rfc_qa.retrieval.keyword_index: Writing 5261 chunks to the index at '/srv/rfc-qa/index.db'
+Indexed 59 RFCs into 5261 chunks. Largest chunk: 1760 characters.
+```
+
+`rfc-query -v` shows how many passages were retrieved and how long the model took. With `-vv` it also
+shows the configuration file, the index, the context budget and the model's token counts. A search
+only logs details, so `rfc-search` needs `-vv`. When a command fails, the error is still printed
+once, as the last line.
+
+The records come from Python's `logging` module, on loggers named after each module under `rfc_qa`.
+The library never configures logging itself, so a program that uses it sees nothing until it does.
+To see the library's progress without other libraries' records, configure logging as usual and set
+the level of the `rfc_qa` logger:
+
+```python
+import logging
+import tempfile
+
+from rfc_qa.ingestion.rfc_downloader import download_rfc
+
+logging.basicConfig(format="%(levelname)s %(name)s: %(message)s")
+logging.getLogger("rfc_qa").setLevel(logging.INFO)
+
+with tempfile.TemporaryDirectory() as directory:
+    download_rfc(791, directory)
+# INFO rfc_qa.ingestion.rfc_downloader: Downloading RFC 791 from https://www.rfc-editor.org/rfc/rfc791.txt
+```
+
+Failures are raised, not logged, so a program that logs the library's records still handles errors
+as described above.
+
 ## Updating ARCHITECTURE.md
 
 `ARCHITECTURE.md` is generated from the source code just before each release, and reviewed in a pull
