@@ -65,7 +65,7 @@ def test_verbosity_0_changes_nothing():
     assert logger.level == level
 
 
-@pytest.mark.parametrize("verbosity, level", [(1, logging.INFO), (2, logging.DEBUG), (3, logging.DEBUG)])
+@pytest.mark.parametrize(("verbosity", "level"), [(1, logging.INFO), (2, logging.DEBUG), (3, logging.DEBUG)])
 def test_verbosity_sets_the_level(verbosity, level):
     cli.configure_logging(verbosity)
     assert logging.getLogger("rfc_qa").level == level

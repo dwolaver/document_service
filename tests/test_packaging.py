@@ -107,7 +107,7 @@ def test_corpus_fields_are_described_above_the_list():
 
 
 @pytest.mark.parametrize(
-    "text, missing",
+    ("text", "missing"),
     [
         ("# Header\n# Section.\n[a]\n\nx = 1   # Setting.\n", []),
         ("# Header\n\n[a]\nx = 1   # Setting.\n", [(3, "[a]")]),

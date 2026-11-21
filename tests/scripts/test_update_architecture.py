@@ -207,7 +207,7 @@ def test_accepted_run_keeps_the_new_file(repo, claude):
 def test_rejected_run_restores_an_existing_file(repo, claude):
     _commit_doc(repo, "# Architecture\n\nOld text.\n")
     claude.result = _result({"claude-sonnet-5-5": 4000})
-    with pytest.raises(ArchitectureError, match="Rejected, and ARCHITECTURE.md was restored"):
+    with pytest.raises(ArchitectureError, match=r"Rejected, and ARCHITECTURE\.md was restored"):
         update_architecture(str(repo), "v0.1.0")
     assert _doc(repo) == "# Architecture\n\nOld text.\n"
 
@@ -247,7 +247,7 @@ def test_untracked_doc_refuses_before_running(repo, claude):
 def test_other_changed_file_is_rejected_and_left_alone(repo, claude):
     _commit_doc(repo, "# Architecture\n\nOld text.\n")
     claude.also_write = "module.py"
-    with pytest.raises(ArchitectureError, match="files other than ARCHITECTURE.md.*module.py"):
+    with pytest.raises(ArchitectureError, match=r"files other than ARCHITECTURE\.md.*module\.py"):
         update_architecture(str(repo), "v0.1.0")
     assert _doc(repo) == "# Architecture\n\nOld text.\n"
     assert (repo / "module.py").read_text(encoding="utf-8") == "changed\n"
@@ -255,7 +255,7 @@ def test_other_changed_file_is_rejected_and_left_alone(repo, claude):
 
 def test_new_untracked_file_from_the_run_is_rejected(repo, claude):
     claude.also_write = "notes.txt"
-    with pytest.raises(ArchitectureError, match="notes.txt"):
+    with pytest.raises(ArchitectureError, match=r"notes\.txt"):
         update_architecture(str(repo), "v0.1.0")
     assert (repo / "notes.txt").exists()
 
@@ -269,7 +269,7 @@ def test_existing_dirty_file_the_run_leaves_alone_is_fine(repo, claude):
 def test_existing_dirty_file_the_run_changes_is_rejected(repo, claude):
     (repo / "module.py").write_text("def public():\n    return 1\n", encoding="utf-8")
     claude.also_write = "module.py"
-    with pytest.raises(ArchitectureError, match="module.py"):
+    with pytest.raises(ArchitectureError, match=r"module\.py"):
         update_architecture(str(repo), "v0.1.0")
 
 

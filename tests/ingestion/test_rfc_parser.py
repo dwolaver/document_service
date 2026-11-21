@@ -17,7 +17,7 @@ def _sections(name):
 
 
 PAGINATED_LAYOUTS = ["early", "hierarchical", "paginated"]
-ALL_LAYOUTS = PAGINATED_LAYOUTS + ["unpaginated"]
+ALL_LAYOUTS = [*PAGINATED_LAYOUTS, "unpaginated"]
 
 
 # --- Page furniture (task 2.2) ---
@@ -34,7 +34,7 @@ def test_page_furniture_is_removed(name):
 
 
 @pytest.mark.parametrize(
-    "name, section, first, second",
+    ("name", "section", "first", "second"),
     [
         ("early", "1.1", "continues across a page", "break and finishes here."),
         ("paginated", "2", "continues across a page", "   break and finishes here."),
@@ -132,7 +132,7 @@ def test_table_of_contents_does_not_start_a_section_body():
 
 
 @pytest.mark.parametrize(
-    "name, section, item",
+    ("name", "section", "item"),
     [
         ("early", "3.9", "1.  CLOSED"),
         ("hierarchical", "1.1.1", "1.  Send datagrams."),

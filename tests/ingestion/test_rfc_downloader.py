@@ -122,7 +122,7 @@ def test_existing_file_returns_its_path_without_a_request(monkeypatch, tmp_path)
 def test_network_error_is_the_cause(monkeypatch, tmp_path, capsys):
     error = requests.ConnectionError("boom")
     _patch_get(monkeypatch, exc=error)
-    with pytest.raises(DownloadError, match="^RFC 9110: download failed: boom$") as excinfo:
+    with pytest.raises(DownloadError, match=r"^RFC 9110: download failed: boom$") as excinfo:
         download_rfc(9110, str(tmp_path))
     assert excinfo.value.__cause__ is error
     _assert_failed_cleanly(capsys, tmp_path, "rfc9110.txt")
@@ -163,14 +163,16 @@ def test_truncated_body_gives_both_sizes(monkeypatch, tmp_path, capsys):
 
 def test_wrong_number_header_rejected(monkeypatch, tmp_path, capsys):
     _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY))}))
-    with pytest.raises(DownloadError, match="^RFC 9999: document header does not identify the requested RFC"):
+    with pytest.raises(
+        DownloadError, match=r"^RFC 9999: document header does not identify the requested RFC"
+    ):
         download_rfc(9999, str(tmp_path))
     _assert_failed_cleanly(capsys, tmp_path, "rfc9999.txt")
 
 
 def test_empty_body_rejected(monkeypatch, tmp_path, capsys):
     _patch_get(monkeypatch, FakeResponse(200, b"", {}))
-    with pytest.raises(DownloadError, match="^RFC 9110: empty response body"):
+    with pytest.raises(DownloadError, match=r"^RFC 9110: empty response body"):
         download_rfc(9110, str(tmp_path))
     _assert_failed_cleanly(capsys, tmp_path, "rfc9110.txt")
 
@@ -197,7 +199,7 @@ def test_write_failure_is_the_cause_and_leaves_no_temp(monkeypatch, tmp_path, ca
         raise error
 
     monkeypatch.setattr(os, "replace", boom)
-    with pytest.raises(DownloadError, match="^RFC 9110: failed to store file: replace failed$") as excinfo:
+    with pytest.raises(DownloadError, match=r"^RFC 9110: failed to store file: replace failed$") as excinfo:
         download_rfc(9110, str(tmp_path))
     assert excinfo.value.__cause__ is error
     _assert_failed_cleanly(capsys, tmp_path, "rfc9110.txt")
@@ -210,7 +212,7 @@ def test_unwritable_directory_is_a_download_error(monkeypatch, tmp_path, capsys)
         raise PermissionError("denied")
 
     monkeypatch.setattr(tempfile, "mkstemp", no_temp_file)
-    with pytest.raises(DownloadError, match="^RFC 9110: failed to store file: denied$"):
+    with pytest.raises(DownloadError, match=r"^RFC 9110: failed to store file: denied$"):
         download_rfc(9110, str(tmp_path))
     _assert_failed_cleanly(capsys, tmp_path, "rfc9110.txt")
 

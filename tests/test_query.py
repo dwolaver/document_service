@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+from typing import ClassVar
 
 import pytest
 
@@ -95,7 +96,7 @@ def setup(tmp_path, monkeypatch, data_dir):
     """A fixture index and config, with the model replaced by ``setup.result`` or ``setup.error``."""
 
     class Setup:
-        calls = []
+        calls: ClassVar[list[tuple[str, list[str], object]]] = []
         error = None
         result = answer_generator.GenerationResult(
             found=True,
@@ -162,7 +163,7 @@ def test_environment_over_default(tmp_path, monkeypatch):
     assert [str(path) for path in read] == [str(tmp_path / "query.toml")]
 
 
-@pytest.mark.parametrize("use_env, source", [(False, "config_dir argument"), (True, "RFC_QA_CONFIG_DIR")])
+@pytest.mark.parametrize(("use_env", "source"), [(False, "config_dir argument"), (True, "RFC_QA_CONFIG_DIR")])
 def test_missing_config_dir_is_a_config_error(tmp_path, monkeypatch, use_env, source):
     missing = str(tmp_path / "missing")
     if use_env:
@@ -214,7 +215,7 @@ def test_data_dir_argument_over_environment(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "changes, name",
+    ("changes", "name"),
     [
         ({"retrieval__limit": 0}, "retrieval.limit"),
         ({"retrieval__limit": "5"}, "retrieval.limit"),
@@ -308,7 +309,7 @@ def test_empty_queries_rejected(setup, bad):
     assert setup.calls == []
 
 
-@pytest.mark.parametrize("bad, name", [(None, "NoneType"), (123, "int"), (b"404", "bytes")])
+@pytest.mark.parametrize(("bad", "name"), [(None, "NoneType"), (123, "int"), (b"404", "bytes")])
 def test_non_string_query_is_a_type_error(monkeypatch, bad, name):
     def must_not_read(*args, **kwargs):
         raise AssertionError("read before the query was checked")
@@ -401,8 +402,10 @@ def test_search_failure_is_index_unavailable_with_retrieval_timing(monkeypatch, 
     monkeypatch.setattr(query, "search", broken_search)
     response = run_query("What does 404 mean?")
     assert response.error_code is QueryErrorCode.INDEX_UNAVAILABLE
-    assert response.error_string is not None and "disk I/O error" in response.error_string
-    assert response.timings is not None and response.timings.retrieval_ms is not None
+    assert response.error_string is not None
+    assert "disk I/O error" in response.error_string
+    assert response.timings is not None
+    assert response.timings.retrieval_ms is not None
 
 
 def _fail_with_config(tmp_path, monkeypatch):
@@ -418,7 +421,7 @@ def _fail_with_index(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "cause, error, code",
+    ("cause", "error", "code"),
     [
         (_fail_with_config, None, QueryErrorCode.CONFIG_INVALID),
         (_fail_with_budget, None, QueryErrorCode.CONFIG_INVALID),
@@ -461,7 +464,7 @@ def test_budget_that_fits_exactly(tmp_path, monkeypatch, setup):
 
 
 @pytest.mark.parametrize(
-    "error, code",
+    ("error", "code"),
     [
         (ModelUnavailableError("Start Ollama"), QueryErrorCode.MODEL_UNAVAILABLE),
         (ModelResponseError("bad output"), QueryErrorCode.MODEL_INVALID_RESPONSE),
@@ -494,14 +497,15 @@ def test_model_body_that_is_not_a_json_object_is_an_invalid_response(tmp_path, m
 
 def test_warm_call_timings(setup):
     timings = run_query("What does a 404 status code mean?").timings
-    assert timings is not None and timings.retrieval_ms is not None
+    assert timings is not None
+    assert timings.retrieval_ms is not None
     assert timings.total_ms >= timings.retrieval_ms >= 0
     assert (timings.model_load_ms, timings.generation_ms) == (2, 48)
     assert (timings.prompt_tokens, timings.answer_tokens) == (1200, 49)
     assert timings.cold_start is False
 
 
-@pytest.mark.parametrize("load_ms, cold", [(499, False), (500, True), (4852, True)])
+@pytest.mark.parametrize(("load_ms", "cold"), [(499, False), (500, True), (4852, True)])
 def test_cold_start_threshold(setup, load_ms, cold):
     setup.result = answer_generator.GenerationResult(
         found=True, answer="a", cited=[CHUNKS[0]], model_load_ms=load_ms
@@ -525,7 +529,8 @@ def test_model_failure_still_reports_timings(setup):
     setup.error = ModelUnavailableError("timed out")
     timings = run_query("What does a 404 status code mean?").timings
     assert timings is not None
-    assert timings.retrieval_ms is not None and timings.total_ms >= timings.retrieval_ms
+    assert timings.retrieval_ms is not None
+    assert timings.total_ms >= timings.retrieval_ms
     assert timings.model_load_ms is None
 
 
@@ -651,7 +656,8 @@ def test_real_model_answers_a_corpus_question():
     assert response.success is True, response.error_string
     assert response.found is True
     assert {c.rfc_number for c in response.citations} & {9110, 7231, 2616}
-    assert response.timings is not None and response.timings.prompt_tokens is not None
+    assert response.timings is not None
+    assert response.timings.prompt_tokens is not None
     assert response.timings.prompt_tokens > 0
 
 
@@ -722,15 +728,18 @@ def test_main_v_shows_progress_on_stderr_only(setup, capsys):
     captured = capsys.readouterr()
     assert captured.out == quiet_out
     levels, other = split_stderr(captured.err)
-    assert other == [] and levels == ["INFO", "INFO"]
-    assert "Retrieved 2 passages" in captured.err and "The model answered" in captured.err
+    assert other == []
+    assert levels == ["INFO", "INFO"]
+    assert "Retrieved 2 passages" in captured.err
+    assert "The model answered" in captured.err
 
 
 def test_main_vv_adds_detail(setup, capsys):
     assert main(["What does a 404 status code mean?", "-vv"]) == 0
     captured = capsys.readouterr()
     levels, other = split_stderr(captured.err)
-    assert other == [] and {"INFO", "DEBUG"} <= set(levels)
+    assert other == []
+    assert {"INFO", "DEBUG"} <= set(levels)
     assert "DEBUG rfc_qa.paths: Configuration directory" in captured.err
 
 
@@ -739,6 +748,7 @@ def test_main_v_failure_ends_with_the_error_once(setup, capsys):
     assert main(["What does a 404 status code mean?", "-v"]) == 1
     captured = capsys.readouterr()
     levels, other = split_stderr(captured.err)
-    assert levels == ["INFO"] and other == ["Can't reach Ollama. Start Ollama."]
+    assert levels == ["INFO"]
+    assert other == ["Can't reach Ollama. Start Ollama."]
     assert captured.err.endswith("Can't reach Ollama. Start Ollama.\n")
     assert captured.out == ""

@@ -81,7 +81,7 @@ def test_relative_environment_resolves_from_the_working_directory(tmp_path, monk
     assert resolve_config_dir().location == tmp_path / "staging"
 
 
-@pytest.mark.parametrize("use_env, source", [(False, "--config-dir"), (True, CONFIG_DIR_ENV)])
+@pytest.mark.parametrize(("use_env", "source"), [(False, "--config-dir"), (True, CONFIG_DIR_ENV)])
 def test_missing_directory_names_path_and_source(tmp_path, monkeypatch, use_env, source):
     missing = str(tmp_path / "missing")
     if use_env:
@@ -117,9 +117,9 @@ def test_data_default_follows_xdg_data_home(tmp_path, monkeypatch):
     assert not os.path.exists(tmp_path / "rfc-qa")
 
 
-def test_tests_use_a_temporary_default_data_directory(_isolated_default_data_dir):
-    assert resolve_data_dir() == SelectedDir(_isolated_default_data_dir, "default")
-    assert _isolated_default_data_dir != REAL_DEFAULT_DATA_DIR()
+def test_tests_use_a_temporary_default_data_directory(isolated_default_data_dir):
+    assert resolve_data_dir() == SelectedDir(isolated_default_data_dir, "default")
+    assert isolated_default_data_dir != REAL_DEFAULT_DATA_DIR()
 
 
 def test_data_environment_over_default(dirs, monkeypatch):
@@ -164,7 +164,7 @@ def _path_records(caplog):
     return [(r.levelno, r.getMessage()) for r in caplog.records if r.name == "rfc_qa.paths"]
 
 
-@pytest.mark.parametrize("use_flag, use_env", [(True, True), (False, True), (False, False)])
+@pytest.mark.parametrize(("use_flag", "use_env"), [(True, True), (False, True), (False, False)])
 def test_selected_config_directory_is_logged(dirs, monkeypatch, caplog, use_flag, use_env):
     caplog.set_level(logging.DEBUG, logger="rfc_qa")
     if use_env:
@@ -177,7 +177,7 @@ def test_selected_config_directory_is_logged(dirs, monkeypatch, caplog, use_flag
     ]
 
 
-@pytest.mark.parametrize("use_flag, use_env", [(True, True), (False, True), (False, False)])
+@pytest.mark.parametrize(("use_flag", "use_env"), [(True, True), (False, True), (False, False)])
 def test_selected_data_directory_is_logged(dirs, monkeypatch, caplog, use_flag, use_env):
     caplog.set_level(logging.DEBUG, logger="rfc_qa")
     if use_env:
