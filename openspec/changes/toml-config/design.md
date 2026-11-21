@@ -237,8 +237,9 @@ the files itself.
 - **A value changes in the conversion,** such as `1.6` becoming a string, or an RFC dropped →
   Before the JSON is deleted, a one-off comparison checks that the loaded TOML equals the loaded
   JSON. The tests that load the real config, and the install test, run as before.
-- **Someone's own JSON copy stops working** → The project isn't deployed. The error names the file,
-  and the README says to start from the packaged TOML files.
+- **Someone's own JSON copy stops working** → The project isn't deployed, and the error names the
+  file. The README describes only the TOML files, as the user asked, so it doesn't explain the
+  change from JSON. The pull request does.
 - **The comments drift from the code over time** → The comment test catches a setting added without
   a comment. It can't check that the wording is right. Review covers that, and the comments are
   kept to what validation enforces.

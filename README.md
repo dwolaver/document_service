@@ -257,10 +257,6 @@ RFC_QA_CONFIG_DIR=/srv/rfc-qa/config rfc-ingest
 rfc-ingest --config-dir staging --corpus small-corpus.toml
 ```
 
-Earlier versions used JSON configuration files, which are no longer read. To keep the settings from
-a copy of those, copy the packaged TOML files as above, then change the same values in them. A JSON file given with `--corpus` or `--config` fails with a
-configuration error naming it.
-
 Generated data goes in one data directory: the downloaded RFCs in its `rfcs/` folder and the index in
 `index.db`. To put it somewhere else, such as a mounted volume, name the directory with `--data-dir`
 or the `RFC_QA_DATA_DIR` environment variable. The precedence is the same as for configuration: the

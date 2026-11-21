@@ -23,9 +23,9 @@
   - the file names and links;
   - the `--corpus small-corpus.toml` example;
   - the configuration-directory text, saying the files are TOML and each setting is described in its file;
-  - a short note that a copy made from the earlier JSON files has to be recreated from the packaged TOML files.
+  - no mention of the earlier JSON format, as the repository owner asked in review.
 
-  Verify that `grep -n 'corpus\.json\|ingest\.json\|query\.json' README.md` finds nothing
+  Verify that `grep -in 'json' README.md` finds nothing
 - [x] 4.2 Run `pytest`, with and without `RFC_QA_INSTALL_TESTS=1`, and `pre-commit run --all-files`. Verify that all pass, and that `grep -rn 'corpus\.json\|ingest\.json\|query\.json\|_load_json\|JSON object' src tests` finds nothing
 - [x] 4.3 From `/tmp`, run `rfc-ingest` with `--data-dir` on a scratch copy of the data directory, and `rfc-query` and `rfc-search` against the real index. Verify that each gives the same stdout as on `main`, so the chunk count, the matches and the answer's sources are unchanged. Copy the packaged config into a scratch directory with the README's `cp` command, break one line in its `query.toml`, and verify that `rfc-query --config-dir` on it exits 1 with one stderr line naming the file, the line and the column
 

@@ -16,7 +16,7 @@ dependency is needed.
   `query.toml`, in TOML. The settings, their names and their sections stay the same. The JSON files
   are removed, and JSON is no longer read. A configuration directory or a `--corpus` or `--config`
   file has to be TOML. The project isn't deployed, so existing copies are converted by hand. The
-  README says how.
+  README describes only the TOML files, and doesn't mention the earlier JSON format.
 - Each file is commented:
   - **Headers:** the file opens with what it configures and which command reads it.
   - **Sections:** each section opens with what it covers.
@@ -58,5 +58,5 @@ None.
     dependency is added.
   - A value the JSON tests set to `null` is left out instead, because TOML has no null.
   - The install test reads the packaged corpus with `tomllib`.
-- README: the file names, a note on converting an existing JSON copy, and the `--corpus` example.
+- README: the file names and the `--corpus` example, with no mention of the earlier JSON format.
 - `ARCHITECTURE.md` still names the old files. It's regenerated before each release.
