@@ -18,7 +18,7 @@ from rfc_qa.generation import answer_generator
 from rfc_qa.query import QueryErrorCode, QueryResponse, Timings, load_query_config, main
 from rfc_qa.query import query as run_query
 from rfc_qa.retrieval.keyword_index import build_index
-from tests.conftest import split_stderr
+from tests.conftest import split_stderr, write_toml
 
 CONFIG = {
     "retrieval": {"limit": 3},
@@ -53,11 +53,10 @@ CHUNKS = [
 
 
 def _write_config(tmp_path, data, monkeypatch):
-    """Write ``query.json`` to ``tmp_path`` and select it through the environment variable."""
-    path = tmp_path / "query.json"
-    path.write_text(json.dumps(data), encoding="utf-8")
+    """Write ``query.toml`` to ``tmp_path`` and select it through the environment variable."""
+    path = write_toml(tmp_path / "query.toml", data)
     monkeypatch.setenv(paths.CONFIG_DIR_ENV, str(tmp_path))
-    return str(path)
+    return path
 
 
 def _with(**changes):
@@ -124,7 +123,7 @@ def setup(tmp_path, monkeypatch, data_dir):
 
 
 def test_real_config_loads():
-    config = load_query_config(paths.packaged_config_dir() / "query.json")
+    config = load_query_config(paths.packaged_config_dir() / "query.toml")
     assert config.model.model == "llama3.2"
     assert config.retrieval_limit == 5
 
@@ -144,7 +143,7 @@ def _spy_on_config_path(monkeypatch):
 def test_default_config_is_the_packaged_configuration(monkeypatch):
     read = _spy_on_config_path(monkeypatch)
     run_query("What does 404 mean?")
-    assert [str(path) for path in read] == [str(paths.packaged_config_dir() / "query.json")]
+    assert [str(path) for path in read] == [str(paths.packaged_config_dir() / "query.toml")]
 
 
 def test_config_dir_argument_over_environment(tmp_path, monkeypatch):
@@ -153,14 +152,14 @@ def test_config_dir_argument_over_environment(tmp_path, monkeypatch):
     monkeypatch.setenv(paths.CONFIG_DIR_ENV, str(tmp_path / "env"))
     read = _spy_on_config_path(monkeypatch)
     run_query("What does 404 mean?", config_dir=str(tmp_path / "argument"))
-    assert [str(path) for path in read] == [str(tmp_path / "argument" / "query.json")]
+    assert [str(path) for path in read] == [str(tmp_path / "argument" / "query.toml")]
 
 
 def test_environment_over_default(tmp_path, monkeypatch):
     monkeypatch.setenv(paths.CONFIG_DIR_ENV, str(tmp_path))
     read = _spy_on_config_path(monkeypatch)
     run_query("What does 404 mean?")
-    assert [str(path) for path in read] == [str(tmp_path / "query.json")]
+    assert [str(path) for path in read] == [str(tmp_path / "query.toml")]
 
 
 @pytest.mark.parametrize("use_env, source", [(False, "config_dir argument"), (True, "RFC_QA_CONFIG_DIR")])
@@ -181,7 +180,7 @@ def test_selected_directory_without_query_config_does_not_use_the_packaged_copy(
     response = run_query("What does 404 mean?", config_dir=str(tmp_path))
     assert (response.success, response.error_code) == (False, QueryErrorCode.CONFIG_INVALID)
     assert response.error_string is not None
-    assert str(tmp_path / "query.json") in response.error_string
+    assert str(tmp_path / "query.toml") in response.error_string
 
 
 def _spy_on_index_path(monkeypatch):
@@ -269,7 +268,7 @@ def test_ollama_base_url_reaches_the_model(setup, monkeypatch):
 
 
 def test_unreadable_config(tmp_path, monkeypatch):
-    (tmp_path / "query.json").write_text("{oops", encoding="utf-8")
+    (tmp_path / "query.toml").write_text("{oops", encoding="utf-8")
     monkeypatch.setenv(paths.CONFIG_DIR_ENV, str(tmp_path))
     assert run_query("What does 404 mean?").error_code is QueryErrorCode.CONFIG_INVALID
 
@@ -585,7 +584,7 @@ def test_main_config_dir_flag_selects_the_directory(setup, tmp_path):
     flag_dir = tmp_path / "flag"
     flag_dir.mkdir()
     data = _with(llm__model="other")
-    (flag_dir / "query.json").write_text(json.dumps(data), encoding="utf-8")
+    write_toml(flag_dir / "query.toml", data)
     assert main(["What does a 404 status code mean?", "--config-dir", str(flag_dir)]) == 0
     assert setup.calls[0][2].model == "other"
 
@@ -695,7 +694,7 @@ def test_query_detail_is_logged(setup, tmp_path, data_dir, caplog):
     caplog.set_level(logging.DEBUG, logger="rfc_qa")
     run_query("What does a 404 status code mean?")
     detail = _query_records(caplog, logging.DEBUG)
-    assert f"Query configuration {str(tmp_path / 'query.json')!r}" in detail
+    assert f"Query configuration {str(tmp_path / 'query.toml')!r}" in detail
     assert f"Index {os.path.join(data_dir, 'index.db')!r}" in detail
     assert "Context budget: 4324 of 8192 tokens (llm.num_ctx)" in detail
 

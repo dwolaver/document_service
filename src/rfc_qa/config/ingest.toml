@@ -1,0 +1,25 @@
+# ==================================================================================================
+#  Ingestion settings: how the RFCs are cut into chunks
+# ==================================================================================================
+#
+#  Read by rfc-ingest. Every number must be positive. The index records these values, so a query
+#  can check that its passages fit the model's context window (see query.toml).
+
+target_chunk_tokens = 1100   # the chunk size to aim for, in tokens (an integer)
+chars_per_token     = 1.6    # the average characters per token for this corpus (see below)
+
+#  The longest chunk, in characters, is the token target times the characters per token:
+#
+#      target_chunk_tokens  x  chars_per_token  =  1100  x  1.6  =  1760 characters
+#
+#  chars_per_token was measured on this corpus with the embedding model's tokenizer. Measure it
+#  again if the corpus or the model changes.
+
+
+# --------------------------------------------------------------------------------------------------
+#  [embedding_model]   The model that chunks are sized for
+# --------------------------------------------------------------------------------------------------
+[embedding_model]
+
+name       = "nomic-embed-text"   # the model's name, recorded in the index
+max_tokens = 2048                 # the most tokens it accepts: target_chunk_tokens can't exceed it

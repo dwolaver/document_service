@@ -9,10 +9,12 @@ user's data directory for rfc-qa and can be overridden by a flag or ``RFC_QA_DAT
 
 import logging
 import os
+import tomllib
 from dataclasses import dataclass
 from importlib.resources import files
 from importlib.resources.abc import Traversable
 from pathlib import Path
+from typing import Any
 
 import platformdirs
 
@@ -21,9 +23,9 @@ from rfc_qa.errors import ConfigError
 logger = logging.getLogger(__name__)
 
 CONFIG_DIR_ENV = "RFC_QA_CONFIG_DIR"
-CORPUS_FILE = "corpus.json"
-INGEST_CONFIG_FILE = "ingest.json"
-QUERY_CONFIG_FILE = "query.json"
+CORPUS_FILE = "corpus.toml"
+INGEST_CONFIG_FILE = "ingest.toml"
+QUERY_CONFIG_FILE = "query.toml"
 PACKAGED_CONFIG_SOURCE = "packaged defaults"
 
 
@@ -70,6 +72,19 @@ ConfigFile = str | Traversable
 def as_traversable(file: ConfigFile) -> Traversable:
     """Return ``file`` as something to open, turning a path into a :class:`~pathlib.Path`."""
     return Path(file) if isinstance(file, str) else file
+
+
+def read_toml(file: ConfigFile) -> dict[str, Any]:
+    """Return the TOML document in ``file``, raising :class:`~rfc_qa.errors.ConfigError` if it can't be read.
+
+    A file that isn't valid TOML, such as a JSON file, is reported with the line and column of the
+    problem.
+    """
+    try:
+        with as_traversable(file).open("rb") as config_file:
+            return tomllib.load(config_file)
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        raise ConfigError(f"Failed to read {str(file)!r}: {exc}") from exc
 
 
 def packaged_config_dir() -> Traversable:

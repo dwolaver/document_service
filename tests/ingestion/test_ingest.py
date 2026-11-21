@@ -3,6 +3,7 @@ import logging
 import os
 import pathlib
 import shutil
+import tomllib
 
 import pytest
 
@@ -17,7 +18,7 @@ from rfc_qa.ingestion.ingest import (
     run_ingestion,
 )
 from rfc_qa.retrieval.keyword_index import read_metadata, search
-from tests.conftest import split_stderr
+from tests.conftest import split_stderr, write_toml
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -32,17 +33,12 @@ CONFIG = {
 }
 
 
-def _write_json(path, data):
-    path.write_text(json.dumps(data), encoding="utf-8")
-    return str(path)
-
-
 def _corpus(tmp_path, rfcs):
-    return load_corpus(_write_json(tmp_path / "corpus.json", {"rfcs": rfcs}))
+    return load_corpus(write_toml(tmp_path / "corpus.toml", {"rfcs": rfcs}))
 
 
 def _config(tmp_path, data):
-    return load_config(_write_json(tmp_path / "config.json", data))
+    return load_config(write_toml(tmp_path / "config.toml", data))
 
 
 def _modified_config(**changes):
@@ -85,26 +81,37 @@ def test_malformed_entry_is_rejected(tmp_path, entry):
         _corpus(tmp_path, [entry])
 
 
-@pytest.mark.parametrize("data", [{}, [], {"rfcs": []}, {"rfcs": "793"}])
+@pytest.mark.parametrize("data", [{}, {"rfcs": []}, {"rfcs": "793"}])
 def test_malformed_manifest_is_rejected(tmp_path, data):
     with pytest.raises(ConfigError):
-        load_corpus(_write_json(tmp_path / "corpus.json", data))
+        load_corpus(write_toml(tmp_path / "corpus.toml", data))
 
 
-def test_invalid_json_is_rejected(tmp_path):
-    path = tmp_path / "corpus.json"
-    path.write_text("{not json", encoding="utf-8")
-    with pytest.raises(ConfigError, match="Failed to read"):
+def test_invalid_toml_names_the_file_line_and_column(tmp_path):
+    path = tmp_path / "corpus.toml"
+    path.write_text('rfcs = [\n    { number = 793, family = "tcp" title = "TCP" },\n]\n', encoding="utf-8")
+    with pytest.raises(ConfigError) as excinfo:
+        load_corpus(str(path))
+    message = str(excinfo.value)
+    assert message.startswith(f"Failed to read {str(path)!r}: ")
+    assert message.endswith("Unclosed inline table (at line 2, column 36)")
+    assert isinstance(excinfo.value.__cause__, tomllib.TOMLDecodeError)
+
+
+def test_json_corpus_is_rejected(tmp_path):
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps({"rfcs": ENTRIES}), encoding="utf-8")
+    with pytest.raises(ConfigError, match=r"^Failed to read .*manifest\.json.*\(at line 1, column 1\)$"):
         load_corpus(str(path))
 
 
 def test_missing_manifest_is_rejected(tmp_path):
     with pytest.raises(ConfigError, match="Failed to read"):
-        load_corpus(str(tmp_path / "missing.json"))
+        load_corpus(str(tmp_path / "missing.toml"))
 
 
 def test_real_corpus_loads_and_has_the_obsolete_pairs():
-    entries = load_corpus(paths.packaged_config_dir() / "corpus.json")
+    entries = load_corpus(paths.packaged_config_dir() / "corpus.toml")
     numbers = {entry.number for entry in entries}
     assert len(entries) == 59
     assert {793, 9293, 2616, 9110, 8446, 9846} <= numbers
@@ -169,7 +176,7 @@ def test_missing_config_value_is_rejected(tmp_path, key):
 
 
 def test_real_config_loads():
-    config = load_config(paths.packaged_config_dir() / "ingest.json")
+    config = load_config(paths.packaged_config_dir() / "ingest.toml")
     assert config.embedding_model_name == "nomic-embed-text"
     assert 0 < config.max_chunk_chars
 
@@ -197,8 +204,8 @@ def workspace(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ingest, "download_rfc", fake_download)
     return {
-        "corpus": _write_json(tmp_path / "corpus.json", {"rfcs": ENTRIES}),
-        "config": _write_json(tmp_path / "config.json", CONFIG),
+        "corpus": write_toml(tmp_path / "corpus.toml", {"rfcs": ENTRIES}),
+        "config": write_toml(tmp_path / "config.toml", CONFIG),
         "data_dir": str(data_dir),
         "index": str(data_dir / "index.db"),
         "downloads": downloads,
@@ -270,8 +277,8 @@ def test_index_records_the_configuration(workspace):
 
 
 def test_chunks_respect_the_configured_maximum(workspace, tmp_path):
-    workspace["config"] = _write_json(
-        tmp_path / "config.json", _modified_config(chars_per_token=1, target_chunk_tokens=60)
+    workspace["config"] = write_toml(
+        tmp_path / "config.toml", _modified_config(chars_per_token=1, target_chunk_tokens=60)
     )
     assert _run(workspace).largest_chunk_chars <= 60
 
@@ -361,15 +368,28 @@ def test_failed_run_keeps_the_earlier_index(workspace, monkeypatch):
 
 
 def test_invalid_manifest_fails_before_downloading(workspace, tmp_path, capsys):
-    workspace["corpus"] = _write_json(tmp_path / "corpus.json", {"rfcs": [ENTRIES[0], ENTRIES[0]]})
+    workspace["corpus"] = write_toml(tmp_path / "corpus.toml", {"rfcs": [ENTRIES[0], ENTRIES[0]]})
     with pytest.raises(ConfigError, match="RFC 793 more than once"):
         _run(workspace)
     assert workspace["downloads"] == []
     assert not os.path.exists(workspace["index"])
 
 
+def test_json_corpus_flag_fails_before_downloading(workspace, tmp_path, capsys):
+    corpus = tmp_path / "corpus.json"
+    corpus.write_text(json.dumps({"rfcs": ENTRIES}), encoding="utf-8")
+    workspace["corpus"] = str(corpus)
+    assert main(_main_args(workspace)) == 1
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert err.startswith(f"Failed to read {str(corpus)!r}: ")
+    assert err.count("\n") == 1
+    assert workspace["downloads"] == []
+    assert not os.path.exists(workspace["index"])
+
+
 def test_invalid_config_fails_before_writing_an_index(workspace, tmp_path, capsys):
-    workspace["config"] = _write_json(tmp_path / "config.json", _modified_config(target_chunk_tokens=9999))
+    workspace["config"] = write_toml(tmp_path / "config.toml", _modified_config(target_chunk_tokens=9999))
     assert main(_main_args(workspace)) != 0
     assert "exceeds" in capsys.readouterr().err
     assert workspace["downloads"] == []
@@ -401,8 +421,8 @@ def test_defaults_read_from_the_packaged_configuration(ingestion_inputs, tmp_pat
     assert main(["--data-dir", str(tmp_path)]) == 0
     assert ingestion_inputs == [
         (
-            str(paths.packaged_config_dir() / "corpus.json"),
-            str(paths.packaged_config_dir() / "ingest.json"),
+            str(paths.packaged_config_dir() / "corpus.toml"),
+            str(paths.packaged_config_dir() / "ingest.toml"),
         )
     ]
 
@@ -412,7 +432,7 @@ def test_environment_selects_the_config_directory(ingestion_inputs, tmp_path, mo
     monkeypatch.setenv(paths.CONFIG_DIR_ENV, directory)
     assert main(["--data-dir", str(tmp_path)]) == 0
     assert ingestion_inputs == [
-        (os.path.join(directory, "corpus.json"), os.path.join(directory, "ingest.json"))
+        (os.path.join(directory, "corpus.toml"), os.path.join(directory, "ingest.toml"))
     ]
 
 
@@ -421,15 +441,15 @@ def test_flag_selects_the_config_directory_over_the_environment(ingestion_inputs
     monkeypatch.setenv(paths.CONFIG_DIR_ENV, _config_dir(tmp_path / "env"))
     assert main(["--config-dir", directory, "--data-dir", str(tmp_path)]) == 0
     assert ingestion_inputs == [
-        (os.path.join(directory, "corpus.json"), os.path.join(directory, "ingest.json"))
+        (os.path.join(directory, "corpus.toml"), os.path.join(directory, "ingest.toml"))
     ]
 
 
 def test_corpus_flag_with_a_config_directory(ingestion_inputs, tmp_path):
     directory = _config_dir(tmp_path / "flag")
-    corpus = str(tmp_path / "elsewhere.json")
+    corpus = str(tmp_path / "elsewhere.toml")
     assert main(["--config-dir", directory, "--corpus", corpus, "--data-dir", str(tmp_path)]) == 0
-    assert ingestion_inputs == [(corpus, os.path.join(directory, "ingest.json"))]
+    assert ingestion_inputs == [(corpus, os.path.join(directory, "ingest.toml"))]
 
 
 @pytest.mark.parametrize("use_env, source", [(False, "--config-dir"), (True, "RFC_QA_CONFIG_DIR")])
@@ -451,9 +471,9 @@ def test_missing_config_directory_fails_before_downloading(workspace, monkeypatc
 def test_selected_directory_without_a_corpus_does_not_use_the_packaged_copy(workspace, capsys):
     directory = os.path.join(workspace["data_dir"], "partial")
     os.makedirs(directory)
-    shutil.copy(workspace["config"], os.path.join(directory, "ingest.json"))
+    shutil.copy(workspace["config"], os.path.join(directory, "ingest.toml"))
     assert main(["--config-dir", directory, "--data-dir", workspace["data_dir"]]) == 1
-    assert os.path.join(directory, "corpus.json") in capsys.readouterr().err
+    assert os.path.join(directory, "corpus.toml") in capsys.readouterr().err
     assert workspace["downloads"] == []
     assert not os.path.exists(workspace["index"])
 

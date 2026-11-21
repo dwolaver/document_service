@@ -6,13 +6,12 @@ or left unchanged.
 """
 
 import argparse
-import json
 import logging
 import os
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, TypeGuard
+from typing import TypeGuard
 
 from rfc_qa import paths
 from rfc_qa.chunk import Chunk
@@ -64,15 +63,6 @@ class IngestSummary:
     largest_chunk_chars: int
 
 
-def _load_json(path: paths.ConfigFile) -> Any:
-    # Parsed JSON is untyped until the caller has validated it.
-    try:
-        with paths.as_traversable(path).open(encoding="utf-8") as json_file:
-            return json.load(json_file)
-    except (OSError, ValueError) as exc:
-        raise ConfigError(f"Failed to read {str(path)!r}: {exc}") from exc
-
-
 def _is_integer(value: object) -> TypeGuard[int]:
     # bool is a subclass of int but is not a valid number here.
     return isinstance(value, int) and not isinstance(value, bool)
@@ -93,8 +83,7 @@ def _parse_corpus_entry(entry: object) -> CorpusEntry:
 
 def load_corpus(path: paths.ConfigFile) -> list[CorpusEntry]:
     """Return the validated manifest entries, raising :class:`~rfc_qa.errors.ConfigError` if it's invalid."""
-    data = _load_json(path)
-    rfcs = data.get("rfcs") if isinstance(data, dict) else None
+    rfcs = paths.read_toml(path).get("rfcs")
     if not isinstance(rfcs, list) or not rfcs:
         raise ConfigError(f"Corpus {str(path)!r} must have a non-empty 'rfcs' list.")
     entries = [_parse_corpus_entry(entry) for entry in rfcs]
@@ -120,9 +109,7 @@ def _positive_integer(value: object, name: str) -> int:
 
 def load_config(path: paths.ConfigFile) -> IngestConfig:
     """Return the validated configuration, raising :class:`~rfc_qa.errors.ConfigError` if it's invalid."""
-    data = _load_json(path)
-    if not isinstance(data, dict):
-        raise ConfigError(f"Config {str(path)!r} must be a JSON object.")
+    data = paths.read_toml(path)
     model = data.get("embedding_model")
     if not isinstance(model, dict):
         raise ConfigError(f"Config embedding_model must be an object, got {model!r}.")

@@ -23,7 +23,7 @@ include = ["rfc_qa*"]
 
 # The default configuration ships inside the package and is read with importlib.resources.
 [tool.setuptools.package-data]
-rfc_qa = ["config/*.json"]
+rfc_qa = ["config/*.toml"]
 
 [tool.ruff]
 line-length = 110

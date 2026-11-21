@@ -1,0 +1,37 @@
+# ==================================================================================================
+#  Query settings
+# ==================================================================================================
+#
+#  Read by rfc-query and by rfc_qa.query.query(). Every number must be positive.
+#
+#  The index isn't set here: it's always index.db in the data directory.
+
+
+# --------------------------------------------------------------------------------------------------
+#  [retrieval]   How passages are found in the index for each question
+# --------------------------------------------------------------------------------------------------
+[retrieval]
+
+limit = 5   # passages sent to the model, an integer (they must fit in llm.num_ctx, see below)
+
+
+# --------------------------------------------------------------------------------------------------
+#  [llm]   The local Ollama model that answers from the passages
+# --------------------------------------------------------------------------------------------------
+[llm]
+
+model    = "llama3.2"                 # Ollama model name. Install it with `ollama pull llama3.2`
+base_url = "http://localhost:11434"   # Ollama's address. OLLAMA_BASE_URL replaces it when set,
+                                      # but this value is still required
+
+num_ctx           = 8192   # the model's context window, in tokens (an integer)
+max_answer_tokens = 512    # the most tokens the answer may use (an integer)
+timeout_seconds   = 120    # how long to wait for Ollama to respond, in seconds
+
+#  The context window has to hold the passages, the prompt and the answer:
+#
+#      retrieval.limit  x  target_chunk_tokens  +  prompt  +  max_answer_tokens   <=  num_ctx
+#            5          x         1100          +   512    +        512           =   6524 <= 8192
+#
+#  target_chunk_tokens comes from the index, which records the value in ingest.toml when it's
+#  built. A query that doesn't fit fails before calling the model.

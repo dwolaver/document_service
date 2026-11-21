@@ -6,7 +6,6 @@ answer from them, and returns the answer with checked citations and timings.
 """
 
 import argparse
-import json
 import logging
 import os
 import sys
@@ -138,14 +137,7 @@ def load_query_config(path: paths.ConfigFile) -> QueryConfig:
     ``OLLAMA_BASE_URL``, when set and not empty, replaces ``llm.base_url``. The file must still give
     a valid ``llm.base_url``, so that it stays complete on its own.
     """
-    try:
-        with paths.as_traversable(path).open(encoding="utf-8") as config_file:
-            data = json.load(config_file)
-    except (OSError, ValueError) as exc:
-        raise ConfigError(f"Failed to read {str(path)!r}: {exc}") from exc
-    if not isinstance(data, dict):
-        raise ConfigError(f"Config {str(path)!r} must be a JSON object.")
-
+    data = paths.read_toml(path)
     retrieval = _section(data, "retrieval")
     llm = _section(data, "llm")
     base_url = _non_empty_string(llm.get("base_url"), "llm.base_url")
