@@ -4,12 +4,11 @@ import pytest
 import requests
 
 from rfc_qa.chunk import Chunk
+from rfc_qa.errors import ModelResponseError, ModelUnavailableError
 from rfc_qa.generation import answer_generator
 from rfc_qa.generation.answer_generator import (
     NOT_FOUND_ANSWER,
-    ModelResponseError,
     ModelSettings,
-    ModelUnavailableError,
     build_messages,
     generate_answer,
 )

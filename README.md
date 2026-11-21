@@ -330,6 +330,42 @@ rfc-query --config-dir staging "What does a 404 status code mean?"
 rfc-query --data-dir /srv/rfc-qa/data "What does a 404 status code mean?"
 ```
 
+## Handling errors
+
+The library never prints. A failure caused by the user, the configuration or the environment raises
+an error from [`rfc_qa.errors`](src/rfc_qa/errors.py), and `str()` of it is a message ready to show.
+Every one is an `RfcQaError`, so one `except` catches them all, and each kind has its own subclass:
+`ConfigError`, `DownloadError`, `IngestError`, `IndexUnavailableError`, `IndexBuildError`,
+`ModelUnavailableError` and `ModelResponseError`. When another exception caused the failure, such as
+a network or database error, it's the error's `__cause__`.
+
+A mistake in the calling code raises the built-in `TypeError` or `ValueError` instead, which
+`except RfcQaError` doesn't catch. For example, `download_rfc("9110", ...)` raises `TypeError`, and
+`download_rfc(0, ...)` raises `ValueError`.
+
+`query()` is the exception. It returns a `QueryResponse` for every expected failure, with an
+`error_code` and the error's message as its `error_string`, and only raises `TypeError` for a query
+that isn't a string. An empty query is user input, so it's returned as `INVALID_QUERY`.
+
+```python
+from rfc_qa.errors import IndexUnavailableError
+from rfc_qa.query import query
+from rfc_qa.retrieval.keyword_index import search
+
+try:
+    search("/nonexistent/index.db", "404 Not Found")
+except IndexUnavailableError as exc:
+    print(exc)  # Index not found: '/nonexistent/index.db'. Run rfc-ingest to build it.
+
+response = query("What does a 404 status code mean?", data_dir="/nonexistent")
+if not response.success:
+    print(response.error_code.name)  # INDEX_UNAVAILABLE
+```
+
+The commands print an error's message as one line on standard error and exit with status 1. Any
+other exception is a bug, so it isn't caught and shows its traceback. A command-line mistake, such as
+an unknown option, prints the usage message and exits with status 2.
+
 ## Updating ARCHITECTURE.md
 
 `ARCHITECTURE.md` is generated from the source code just before each release, and reviewed in a pull

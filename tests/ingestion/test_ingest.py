@@ -6,9 +6,9 @@ import shutil
 import pytest
 
 from rfc_qa import paths
+from rfc_qa.errors import ConfigError, DownloadError, IndexBuildError, IngestError
 from rfc_qa.ingestion import ingest
 from rfc_qa.ingestion.ingest import (
-    IngestError,
     IngestSummary,
     load_config,
     load_corpus,
@@ -57,12 +57,12 @@ def test_valid_manifest(tmp_path):
 
 
 def test_duplicate_rfc_is_rejected(tmp_path):
-    with pytest.raises(IngestError, match="RFC 793 more than once"):
+    with pytest.raises(ConfigError, match="RFC 793 more than once"):
         _corpus(tmp_path, [ENTRIES[0], ENTRIES[0]])
 
 
 def test_unknown_family_is_rejected(tmp_path):
-    with pytest.raises(IngestError, match="unknown family"):
+    with pytest.raises(ConfigError, match="unknown family"):
         _corpus(tmp_path, [{"number": 1, "family": "dns", "title": "x"}])
 
 
@@ -79,25 +79,25 @@ def test_unknown_family_is_rejected(tmp_path):
     ],
 )
 def test_malformed_entry_is_rejected(tmp_path, entry):
-    with pytest.raises(IngestError):
+    with pytest.raises(ConfigError):
         _corpus(tmp_path, [entry])
 
 
 @pytest.mark.parametrize("data", [{}, [], {"rfcs": []}, {"rfcs": "793"}])
 def test_malformed_manifest_is_rejected(tmp_path, data):
-    with pytest.raises(IngestError):
+    with pytest.raises(ConfigError):
         load_corpus(_write_json(tmp_path / "corpus.json", data))
 
 
 def test_invalid_json_is_rejected(tmp_path):
     path = tmp_path / "corpus.json"
     path.write_text("{not json", encoding="utf-8")
-    with pytest.raises(IngestError, match="Failed to read"):
+    with pytest.raises(ConfigError, match="Failed to read"):
         load_corpus(str(path))
 
 
 def test_missing_manifest_is_rejected(tmp_path):
-    with pytest.raises(IngestError, match="Failed to read"):
+    with pytest.raises(ConfigError, match="Failed to read"):
         load_corpus(str(tmp_path / "missing.json"))
 
 
@@ -132,7 +132,7 @@ def test_different_model_changes_the_limit_without_code(tmp_path):
 
 
 def test_target_above_model_limit_reports_both_values(tmp_path):
-    with pytest.raises(IngestError, match=r"\(3000\) exceeds .* \(2048\)"):
+    with pytest.raises(ConfigError, match=r"\(3000\) exceeds .* \(2048\)"):
         _config(tmp_path, _modified_config(target_chunk_tokens=3000))
 
 
@@ -155,14 +155,14 @@ def test_target_above_model_limit_reports_both_values(tmp_path):
     ],
 )
 def test_invalid_config_is_rejected(tmp_path, changes):
-    with pytest.raises(IngestError, match="Config"):
+    with pytest.raises(ConfigError, match="Config"):
         _config(tmp_path, _modified_config(**changes))
 
 
 @pytest.mark.parametrize("key", ["chars_per_token", "target_chunk_tokens", "embedding_model"])
 def test_missing_config_value_is_rejected(tmp_path, key):
     data = {k: v for k, v in CONFIG.items() if k != key}
-    with pytest.raises(IngestError, match="Config"):
+    with pytest.raises(ConfigError, match="Config"):
         _config(tmp_path, data)
 
 
@@ -189,8 +189,9 @@ def workspace(tmp_path, monkeypatch):
     def fake_download(number, directory):
         downloads.append(number)
         name = {793: "early", 9110: "unpaginated"}[number]
-        _copy_fixture(name, pathlib.Path(directory) / "rfc{n}.txt".format(n=number))
-        return True
+        path = pathlib.Path(directory) / "rfc{n}.txt".format(n=number)
+        _copy_fixture(name, path)
+        return str(path)
 
     monkeypatch.setattr(ingest, "download_rfc", fake_download)
     return {
@@ -280,11 +281,60 @@ def test_summary_is_printed(workspace, capsys):
     assert "Largest chunk:" in output
 
 
-def test_failed_download_names_the_rfc(workspace, monkeypatch, capsys):
-    monkeypatch.setattr(ingest, "download_rfc", lambda number, directory: False)
-    assert main(_main_args(workspace)) != 0
-    assert "RFC 793: download failed." in capsys.readouterr().err
+def _failing_download(number, directory):
+    raise DownloadError("RFC {n}: unexpected HTTP status 503.".format(n=number))
+
+
+def test_failed_download_prints_its_reason_once(workspace, monkeypatch, capsys):
+    monkeypatch.setattr(ingest, "download_rfc", _failing_download)
+    assert main(_main_args(workspace)) == 1
+    assert capsys.readouterr() == ("", "RFC 793: unexpected HTTP status 503.\n")
     assert not os.path.exists(workspace["index"])
+
+
+def test_failed_download_propagates_from_run_ingestion(workspace, monkeypatch):
+    monkeypatch.setattr(ingest, "download_rfc", _failing_download)
+    with pytest.raises(DownloadError, match="RFC 793"):
+        _run(workspace)
+
+
+def test_unreadable_rfc_names_the_rfc(workspace, monkeypatch, capsys):
+    _run(workspace)
+    os.remove(workspace["index"])
+    capsys.readouterr()
+    error = PermissionError(13, "Permission denied")
+    real_open = open
+
+    def fake_open(path, *args, **kwargs):
+        if str(path).endswith("rfc9110.txt"):
+            raise error
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", fake_open)
+    with pytest.raises(IngestError, match="^RFC 9110: failed to read ") as excinfo:
+        _run(workspace)
+    assert excinfo.value.__cause__ is error
+    assert not os.path.exists(workspace["index"])
+
+    assert main(_main_args(workspace)) == 1
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert err.count("\n") == 1
+    assert err.startswith("RFC 9110: failed to read ")
+    assert "Permission denied" in err
+    assert not os.path.exists(workspace["index"])
+
+
+def test_failed_index_build_prints_once(workspace, monkeypatch, capsys):
+    def fail_build(chunks, metadata, path):
+        raise IndexBuildError("Failed to build index {p!r}: disk full".format(p=path))
+
+    monkeypatch.setattr(ingest, "build_index", fail_build)
+    assert main(_main_args(workspace)) == 1
+    assert capsys.readouterr() == (
+        "",
+        "Failed to build index {p!r}: disk full\n".format(p=workspace["index"]),
+    )
 
 
 def test_rfc_with_no_chunks_names_the_rfc(workspace, capsys):
@@ -293,8 +343,8 @@ def test_rfc_with_no_chunks_names_the_rfc(workspace, capsys):
     for number in (793, 9110):
         with open(os.path.join(rfc_dir, "rfc{n}.txt".format(n=number)), "w") as rfc_file:
             rfc_file.write("no structure here\n")
-    assert main(_main_args(workspace)) != 0
-    assert "RFC 793: produced no chunks." in capsys.readouterr().err
+    assert main(_main_args(workspace)) == 1
+    assert capsys.readouterr() == ("", "RFC 793: produced no chunks.\n")
     assert not os.path.exists(workspace["index"])
 
 
@@ -302,10 +352,18 @@ def test_failed_run_keeps_the_earlier_index(workspace, monkeypatch):
     _run(workspace)
     before = open(workspace["index"], "rb").read()
     os.remove(os.path.join(workspace["data_dir"], "rfcs", "rfc793.txt"))
-    monkeypatch.setattr(ingest, "download_rfc", lambda number, directory: False)
-    assert main(_main_args(workspace)) != 0
+    monkeypatch.setattr(ingest, "download_rfc", _failing_download)
+    assert main(_main_args(workspace)) == 1
     assert open(workspace["index"], "rb").read() == before
     assert sorted(os.listdir(workspace["data_dir"])) == ["index.db", "rfcs"]
+
+
+def test_invalid_manifest_fails_before_downloading(workspace, tmp_path, capsys):
+    workspace["corpus"] = _write_json(tmp_path / "corpus.json", {"rfcs": [ENTRIES[0], ENTRIES[0]]})
+    with pytest.raises(ConfigError, match="RFC 793 more than once"):
+        _run(workspace)
+    assert workspace["downloads"] == []
+    assert not os.path.exists(workspace["index"])
 
 
 def test_invalid_config_fails_before_writing_an_index(workspace, tmp_path, capsys):

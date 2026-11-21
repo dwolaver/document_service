@@ -13,6 +13,7 @@ from typing import Any
 import requests
 
 from rfc_qa.chunk import Chunk
+from rfc_qa.errors import ModelResponseError, ModelUnavailableError
 
 NOT_FOUND_ANSWER = "The indexed RFCs don't answer this question."
 
@@ -33,14 +34,6 @@ _ANSWER_SCHEMA = {
 }
 
 _NANOSECONDS_PER_MS = 1_000_000
-
-
-class ModelUnavailableError(Exception):
-    """The model service couldn't produce a response, with a message saying how to fix it."""
-
-
-class ModelResponseError(Exception):
-    """The model service responded, but its output can't be used."""
 
 
 @dataclass(frozen=True)

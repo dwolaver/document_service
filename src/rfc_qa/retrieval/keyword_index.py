@@ -12,6 +12,8 @@ from dataclasses import dataclass
 
 from rfc_qa import paths
 from rfc_qa.chunk import Chunk
+from rfc_qa.cli import report_error
+from rfc_qa.errors import IndexBuildError, IndexUnavailableError, RfcQaError
 
 DEFAULT_LIMIT = 5
 
@@ -60,10 +62,6 @@ class SearchResult:
     score: float
 
 
-def _log_error(message: str) -> None:
-    print(message, file=sys.stderr)
-
-
 def _write_index(path: str, chunks: Iterable[Chunk], metadata: Mapping[str, object]) -> None:
     connection = sqlite3.connect(path)
     try:
@@ -88,11 +86,11 @@ def _write_index(path: str, chunks: Iterable[Chunk], metadata: Mapping[str, obje
         connection.close()
 
 
-def build_index(chunks: Iterable[Chunk], metadata: Mapping[str, object], path: str) -> bool:
+def build_index(chunks: Iterable[Chunk], metadata: Mapping[str, object], path: str) -> None:
     """Write ``chunks`` and ``metadata`` to a new index at ``path``, replacing it atomically.
 
-    Returns ``True`` on success. On failure it returns ``False`` after printing a diagnostic,
-    leaving any existing index unchanged and no temporary file behind.
+    Raises :class:`~rfc_qa.errors.IndexBuildError` on failure, leaving any existing index
+    unchanged and no temporary file behind.
     """
     tmp_path: str | None = None
     try:
@@ -102,33 +100,39 @@ def build_index(chunks: Iterable[Chunk], metadata: Mapping[str, object], path: s
         os.close(tmp_fd)
         _write_index(tmp_path, chunks, metadata)
         os.replace(tmp_path, path)
-        return True
     except (OSError, sqlite3.Error) as exc:
-        _log_error("Failed to build index {p!r}: {e}".format(p=path, e=exc))
         if tmp_path is not None and os.path.exists(tmp_path):
             os.remove(tmp_path)
-        return False
+        raise IndexBuildError("Failed to build index {p!r}: {e}".format(p=path, e=exc)) from exc
 
 
-def _connect_read_only(path: str) -> sqlite3.Connection | None:
+def _unreadable(action: str, path: str, exc: sqlite3.Error) -> IndexUnavailableError:
+    return IndexUnavailableError(
+        "Failed to {a} index {p!r}: {e}. Rebuild it with rfc-ingest.".format(a=action, p=path, e=exc)
+    )
+
+
+def _connect_read_only(path: str) -> sqlite3.Connection:
     """Open an existing index. SQLite would otherwise create an empty file at a missing path."""
     if not os.path.isfile(path):
-        _log_error("Index not found: {p!r}. Run rfc-ingest to build it.".format(p=path))
-        return None
+        raise IndexUnavailableError("Index not found: {p!r}. Run rfc-ingest to build it.".format(p=path))
     uri = pathlib.Path(path).resolve().as_uri() + "?mode=ro"
-    return sqlite3.connect(uri, uri=True)
+    try:
+        return sqlite3.connect(uri, uri=True)
+    except sqlite3.Error as exc:
+        raise _unreadable("open", path, exc) from exc
 
 
-def read_metadata(path: str) -> dict[str, str] | None:
-    """Return the index's build configuration as a dict, or ``None`` if it can't be read."""
+def read_metadata(path: str) -> dict[str, str]:
+    """Return the index's build configuration as a dict.
+
+    Raises :class:`~rfc_qa.errors.IndexUnavailableError` if the index is missing or can't be read.
+    """
     connection = _connect_read_only(path)
-    if connection is None:
-        return None
     try:
         return dict(connection.execute("SELECT key, value FROM metadata"))
     except sqlite3.Error as exc:
-        _log_error("Failed to read index {p!r}: {e}".format(p=path, e=exc))
-        return None
+        raise _unreadable("read", path, exc) from exc
     finally:
         connection.close()
 
@@ -139,15 +143,13 @@ def _to_match_expression(query_text: str) -> str:
     return " OR ".join('"{t}"'.format(t=token) for token in tokens)
 
 
-def search(path: str, query_text: str, limit: int = DEFAULT_LIMIT) -> list[SearchResult] | None:
+def search(path: str, query_text: str, limit: int = DEFAULT_LIMIT) -> list[SearchResult]:
     """Return up to ``limit`` chunks matching ``query_text``, best first.
 
-    Returns an empty list when nothing matches, and ``None`` after printing a diagnostic when the
-    index can't be read.
+    Returns an empty list when nothing matches. Raises :class:`~rfc_qa.errors.IndexUnavailableError`
+    if the index is missing or can't be read.
     """
     connection = _connect_read_only(path)
-    if connection is None:
-        return None
     try:
         expression = _to_match_expression(query_text)
         if not expression or limit <= 0:
@@ -156,8 +158,7 @@ def search(path: str, query_text: str, limit: int = DEFAULT_LIMIT) -> list[Searc
         # bm25() is more negative for better matches.
         return [SearchResult(Chunk(*row[:7]), -row[7]) for row in rows]
     except sqlite3.Error as exc:
-        _log_error("Failed to search index {p!r}: {e}".format(p=path, e=exc))
-        return None
+        raise _unreadable("search", path, exc) from exc
     finally:
         connection.close()
 
@@ -186,9 +187,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     index_path = args.index
     if index_path is None:
         index_path = paths.resolve_data_dir(args.data_dir).file(paths.INDEX_FILE)
-    results = search(index_path, args.query, args.limit)
-    if results is None:
-        return 1
+    try:
+        results = search(index_path, args.query, args.limit)
+    except RfcQaError as exc:
+        return report_error(exc)
     for result in results:
         chunk = result.chunk
         print(

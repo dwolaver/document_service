@@ -15,16 +15,14 @@ from typing import Any, TypeGuard
 
 from rfc_qa import paths
 from rfc_qa.chunk import Chunk
+from rfc_qa.cli import report_error
+from rfc_qa.errors import ConfigError, IngestError, RfcQaError
 from rfc_qa.ingestion.chunker import chunk_sections
 from rfc_qa.ingestion.rfc_downloader import download_rfc
 from rfc_qa.ingestion.rfc_parser import parse_rfc
 from rfc_qa.retrieval.keyword_index import build_index
 
 FAMILIES = ("http", "tls", "tcp")
-
-
-class IngestError(Exception):
-    """A problem that stops ingestion, with a message ready to show."""
 
 
 @dataclass(frozen=True)
@@ -63,17 +61,13 @@ class IngestSummary:
     largest_chunk_chars: int
 
 
-def _log_error(message: str) -> None:
-    print(message, file=sys.stderr)
-
-
 def _load_json(path: paths.ConfigFile) -> Any:
     # Parsed JSON is untyped until the caller has validated it.
     try:
         with paths.as_traversable(path).open(encoding="utf-8") as json_file:
             return json.load(json_file)
     except (OSError, ValueError) as exc:
-        raise IngestError("Failed to read {p!r}: {e}".format(p=str(path), e=exc)) from exc
+        raise ConfigError("Failed to read {p!r}: {e}".format(p=str(path), e=exc)) from exc
 
 
 def _is_integer(value: object) -> TypeGuard[int]:
@@ -83,67 +77,67 @@ def _is_integer(value: object) -> TypeGuard[int]:
 
 def _parse_corpus_entry(entry: object) -> CorpusEntry:
     if not isinstance(entry, dict):
-        raise IngestError("Corpus entry is not an object: {e!r}".format(e=entry))
+        raise ConfigError("Corpus entry is not an object: {e!r}".format(e=entry))
     number, family, title = entry.get("number"), entry.get("family"), entry.get("title")
     if not _is_integer(number) or number <= 0:
-        raise IngestError("Corpus entry has an invalid RFC number: {e!r}".format(e=entry))
+        raise ConfigError("Corpus entry has an invalid RFC number: {e!r}".format(e=entry))
     if family not in FAMILIES:
-        raise IngestError("Corpus entry has an unknown family: {e!r}".format(e=entry))
+        raise ConfigError("Corpus entry has an unknown family: {e!r}".format(e=entry))
     if not isinstance(title, str) or not title.strip():
-        raise IngestError("Corpus entry has an invalid title: {e!r}".format(e=entry))
+        raise ConfigError("Corpus entry has an invalid title: {e!r}".format(e=entry))
     return CorpusEntry(number, family, title)
 
 
 def load_corpus(path: paths.ConfigFile) -> list[CorpusEntry]:
-    """Return the validated manifest entries, raising :class:`IngestError` if it's invalid."""
+    """Return the validated manifest entries, raising :class:`~rfc_qa.errors.ConfigError` if it's invalid."""
     data = _load_json(path)
     rfcs = data.get("rfcs") if isinstance(data, dict) else None
     if not isinstance(rfcs, list) or not rfcs:
-        raise IngestError("Corpus {p!r} must have a non-empty 'rfcs' list.".format(p=str(path)))
+        raise ConfigError("Corpus {p!r} must have a non-empty 'rfcs' list.".format(p=str(path)))
     entries = [_parse_corpus_entry(entry) for entry in rfcs]
     seen: set[int] = set()
     for entry in entries:
         if entry.number in seen:
-            raise IngestError("Corpus lists RFC {n} more than once.".format(n=entry.number))
+            raise ConfigError("Corpus lists RFC {n} more than once.".format(n=entry.number))
         seen.add(entry.number)
     return entries
 
 
 def _positive_number(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
-        raise IngestError("Config {n} must be a positive number, got {v!r}.".format(n=name, v=value))
+        raise ConfigError("Config {n} must be a positive number, got {v!r}.".format(n=name, v=value))
     return value
 
 
 def _positive_integer(value: object, name: str) -> int:
     if not _is_integer(value) or value <= 0:
-        raise IngestError("Config {n} must be a positive integer, got {v!r}.".format(n=name, v=value))
+        raise ConfigError("Config {n} must be a positive integer, got {v!r}.".format(n=name, v=value))
     return value
 
 
 def load_config(path: paths.ConfigFile) -> IngestConfig:
-    """Return the validated configuration, raising :class:`IngestError` if it's invalid."""
+    """Return the validated configuration, raising :class:`~rfc_qa.errors.ConfigError` if it's invalid."""
     data = _load_json(path)
     if not isinstance(data, dict):
-        raise IngestError("Config {p!r} must be a JSON object.".format(p=str(path)))
+        raise ConfigError("Config {p!r} must be a JSON object.".format(p=str(path)))
     model = data.get("embedding_model")
     if not isinstance(model, dict):
-        raise IngestError("Config embedding_model must be an object, got {v!r}.".format(v=model))
+        raise ConfigError("Config embedding_model must be an object, got {v!r}.".format(v=model))
     name = model.get("name")
     if not isinstance(name, str) or not name.strip():
-        raise IngestError("Config embedding_model.name must be a name, got {v!r}.".format(v=name))
+        raise ConfigError("Config embedding_model.name must be a name, got {v!r}.".format(v=name))
     max_tokens = _positive_integer(model.get("max_tokens"), "embedding_model.max_tokens")
     chars_per_token = _positive_number(data.get("chars_per_token"), "chars_per_token")
     target = _positive_integer(data.get("target_chunk_tokens"), "target_chunk_tokens")
     if target > max_tokens:
-        raise IngestError(
+        raise ConfigError(
             "Config target_chunk_tokens ({t}) exceeds embedding_model.max_tokens ({m}).".format(
                 t=target, m=max_tokens
             )
         )
     config = IngestConfig(name, max_tokens, chars_per_token, target)
     if config.max_chunk_chars < 1:
-        raise IngestError("Config produces an empty chunk size limit.")
+        raise ConfigError("Config produces an empty chunk size limit.")
     return config
 
 
@@ -155,13 +149,17 @@ def _ensure_downloaded(entries: Sequence[CorpusEntry], rfc_dir: str) -> None:
     os.makedirs(rfc_dir, exist_ok=True)
     for entry in entries:
         if not os.path.exists(_rfc_path(rfc_dir, entry.number)):
-            if not download_rfc(entry.number, rfc_dir):
-                raise IngestError("RFC {n}: download failed.".format(n=entry.number))
+            download_rfc(entry.number, rfc_dir)
 
 
 def _chunk_rfc(entry: CorpusEntry, rfc_dir: str, max_chunk_chars: int) -> list[Chunk]:
-    with open(_rfc_path(rfc_dir, entry.number), encoding="utf-8", errors="replace") as rfc_file:
-        sections = parse_rfc(rfc_file.read())
+    path = _rfc_path(rfc_dir, entry.number)
+    try:
+        with open(path, encoding="utf-8", errors="replace") as rfc_file:
+            text = rfc_file.read()
+    except OSError as exc:
+        raise IngestError("RFC {n}: failed to read {p!r}: {e}".format(n=entry.number, p=path, e=exc)) from exc
+    sections = parse_rfc(text)
     chunks = chunk_sections(sections, entry.number, entry.title, entry.family, max_chunk_chars)
     if not chunks:
         raise IngestError("RFC {n}: produced no chunks.".format(n=entry.number))
@@ -171,7 +169,13 @@ def _chunk_rfc(entry: CorpusEntry, rfc_dir: str, max_chunk_chars: int) -> list[C
 def run_ingestion(
     corpus_path: paths.ConfigFile, config_path: paths.ConfigFile, data_dir: str
 ) -> IngestSummary:
-    """Build the index, returning an :class:`IngestSummary` or raising :class:`IngestError`."""
+    """Build the index and return an :class:`IngestSummary`.
+
+    Raises :class:`~rfc_qa.errors.ConfigError` for an invalid manifest or configuration,
+    :class:`~rfc_qa.errors.DownloadError` for an RFC that can't be downloaded,
+    :class:`~rfc_qa.errors.IngestError` for one that can't be read or yields no chunks, and
+    :class:`~rfc_qa.errors.IndexBuildError` if the index can't be written.
+    """
     entries = load_corpus(corpus_path)
     config = load_config(config_path)
     rfc_dir = os.path.join(data_dir, paths.RFCS_FOLDER)
@@ -181,8 +185,7 @@ def run_ingestion(
     for entry in entries:
         chunks.extend(_chunk_rfc(entry, rfc_dir, config.max_chunk_chars))
 
-    if not build_index(chunks, config.as_metadata(), os.path.join(data_dir, paths.INDEX_FILE)):
-        raise IngestError("Index build failed.")
+    build_index(chunks, config.as_metadata(), os.path.join(data_dir, paths.INDEX_FILE))
     return IngestSummary(len(entries), len(chunks), max(len(chunk.text) for chunk in chunks))
 
 
@@ -228,9 +231,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         corpus_path, config_path = _input_paths(args)
         data_dir = paths.resolve_data_dir(args.data_dir)
         summary = run_ingestion(corpus_path, config_path, data_dir.path)
-    except (IngestError, paths.ConfigDirError) as exc:
-        _log_error(str(exc))
-        return 1
+    except RfcQaError as exc:
+        return report_error(exc)
 
     print(
         "Indexed {r} RFCs into {c} chunks. Largest chunk: {l} characters.".format(

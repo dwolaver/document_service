@@ -15,6 +15,8 @@ from pathlib import Path
 
 import platformdirs
 
+from rfc_qa.errors import ConfigError
+
 CONFIG_DIR_ENV = "RFC_QA_CONFIG_DIR"
 CORPUS_FILE = "corpus.json"
 INGEST_CONFIG_FILE = "ingest.json"
@@ -26,10 +28,6 @@ APP_NAME = "rfc-qa"
 DATA_DIR_ENV = "RFC_QA_DATA_DIR"
 RFCS_FOLDER = "rfcs"
 INDEX_FILE = "index.db"
-
-
-class ConfigDirError(ValueError):
-    """The selected configuration directory doesn't exist, with a message naming it and its source."""
 
 
 @dataclass(frozen=True)
@@ -89,7 +87,7 @@ def _selected_path(explicit: str | None, explicit_source: str, env: str) -> Sele
 
 
 def resolve_config_dir(explicit: str | None = None, explicit_source: str = "--config-dir") -> ConfigDir:
-    """Return the configuration directory to use, raising :class:`ConfigDirError` if it's missing.
+    """Return the configuration directory to use, raising :class:`~rfc_qa.errors.ConfigError` if it's missing.
 
     The order is ``explicit``, then ``RFC_QA_CONFIG_DIR`` if it's set and not empty, then the
     packaged defaults. A selected directory has to provide every file it's asked for: the packaged
@@ -99,7 +97,7 @@ def resolve_config_dir(explicit: str | None = None, explicit_source: str = "--co
     if selected is None:
         return ConfigDir(packaged_config_dir(), PACKAGED_CONFIG_SOURCE)
     if not os.path.isdir(selected.path):
-        raise ConfigDirError(
+        raise ConfigError(
             "Configuration directory {p!r} (from {s}) doesn't exist.".format(
                 p=selected.path, s=selected.source
             )

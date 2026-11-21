@@ -5,8 +5,14 @@ import pytest
 
 from rfc_qa import paths, query
 from rfc_qa.chunk import Chunk
+from rfc_qa.errors import (
+    ConfigError,
+    DownloadError,
+    IndexUnavailableError,
+    ModelResponseError,
+    ModelUnavailableError,
+)
 from rfc_qa.generation import answer_generator
-from rfc_qa.generation.answer_generator import ModelResponseError, ModelUnavailableError
 from rfc_qa.query import QueryErrorCode, QueryResponse, Timings, load_query_config, main
 from rfc_qa.query import query as run_query
 from rfc_qa.retrieval.keyword_index import build_index
@@ -70,7 +76,7 @@ def _data_dir(path, metadata=None):
     """Build a fixture index as ``index.db`` in a new data directory at ``path``."""
     path.mkdir()
     metadata = {"target_chunk_tokens": 1100} if metadata is None else metadata
-    assert build_index(CHUNKS, metadata, str(path / "index.db"))
+    build_index(CHUNKS, metadata, str(path / "index.db"))
     return str(path)
 
 
@@ -126,7 +132,7 @@ def _spy_on_config_path(monkeypatch):
 
     def fake_load(path):
         read.append(path)
-        raise query.QueryConfigError("stop")
+        raise ConfigError("stop")
 
     monkeypatch.setattr(query, "load_query_config", fake_load)
     return read
@@ -291,14 +297,25 @@ def test_timings_defaults():
 # --- Input validation ---
 
 
-def test_invalid_queries_rejected(setup):
-    for bad in [None, 123, "", "   ", "\t\n"]:
-        # A wrong type is the point: query() must reject it at runtime.
-        response = run_query(bad)  # type: ignore[arg-type]
-        assert (response.success, response.error_code) == (False, QueryErrorCode.INVALID_QUERY)
-        assert response.error_string
-        assert (response.answer, response.timings) == (None, None)
+@pytest.mark.parametrize("bad", ["", "   ", "\t\n"])
+def test_empty_queries_rejected(setup, bad):
+    response = run_query(bad)
+    assert (response.success, response.error_code) == (False, QueryErrorCode.INVALID_QUERY)
+    assert response.error_string
+    assert (response.answer, response.timings) == (None, None)
     assert setup.calls == []
+
+
+@pytest.mark.parametrize("bad, name", [(None, "NoneType"), (123, "int"), (b"404", "bytes")])
+def test_non_string_query_is_a_type_error(monkeypatch, bad, name):
+    def must_not_read(*args, **kwargs):
+        raise AssertionError("read before the query was checked")
+
+    monkeypatch.setattr(paths, "resolve_config_dir", must_not_read)
+    monkeypatch.setattr(query, "read_metadata", must_not_read)
+    # A wrong type is the point: query() must reject it at runtime.
+    with pytest.raises(TypeError, match="^Query must be a str, got {n}\\.$".format(n=name)):
+        run_query(bad)
 
 
 # --- Pipeline (task 3.1) ---
@@ -349,9 +366,81 @@ def test_missing_index(tmp_path, monkeypatch, setup):
     assert setup.calls == []
 
 
-def test_index_without_chunk_token_target(tmp_path, monkeypatch, setup):
-    monkeypatch.setenv(paths.DATA_DIR_ENV, _data_dir(tmp_path / "old", metadata={}))
-    assert run_query("What does 404 mean?").error_code is QueryErrorCode.INDEX_UNAVAILABLE
+@pytest.mark.parametrize("metadata", [{}, {"target_chunk_tokens": "many"}])
+def test_index_without_a_usable_chunk_token_target(tmp_path, monkeypatch, setup, metadata):
+    data_dir = _data_dir(tmp_path / "old", metadata=metadata)
+    monkeypatch.setenv(paths.DATA_DIR_ENV, data_dir)
+    response = run_query("What does 404 mean?")
+    assert response.error_code is QueryErrorCode.INDEX_UNAVAILABLE
+    assert response.error_string == (
+        "The index at {p!r} doesn't record a usable target_chunk_tokens. Rebuild it with `rfc-ingest`."
+    ).format(p=os.path.join(data_dir, "index.db"))
+    assert setup.calls == []
+
+
+def test_unreadable_index(tmp_path, monkeypatch, setup):
+    data_dir = tmp_path / "corrupt"
+    data_dir.mkdir()
+    (data_dir / "index.db").write_bytes(b"this is not a database at all, but it is long enough to be read")
+    monkeypatch.setenv(paths.DATA_DIR_ENV, str(data_dir))
+    response = run_query("What does 404 mean?")
+    assert (response.success, response.error_code) == (False, QueryErrorCode.INDEX_UNAVAILABLE)
+    assert response.error_string is not None
+    assert str(data_dir / "index.db") in response.error_string
+    assert "rfc-ingest" in response.error_string
+    assert setup.calls == []
+
+
+def test_search_failure_is_index_unavailable_with_retrieval_timing(monkeypatch, setup):
+    def broken_search(path, text, limit):
+        raise IndexUnavailableError("Failed to search index {p!r}: disk I/O error.".format(p=path))
+
+    monkeypatch.setattr(query, "search", broken_search)
+    response = run_query("What does 404 mean?")
+    assert response.error_code is QueryErrorCode.INDEX_UNAVAILABLE
+    assert response.error_string is not None and "disk I/O error" in response.error_string
+    assert response.timings is not None and response.timings.retrieval_ms is not None
+
+
+def _fail_with_config(tmp_path, monkeypatch):
+    _write_config(tmp_path, _with(llm__num_ctx=0), monkeypatch)
+
+
+def _fail_with_budget(tmp_path, monkeypatch):
+    _write_config(tmp_path, _with(llm__num_ctx=4096), monkeypatch)
+
+
+def _fail_with_index(tmp_path, monkeypatch):
+    monkeypatch.setenv(paths.DATA_DIR_ENV, str(tmp_path / "missing"))
+
+
+@pytest.mark.parametrize(
+    "cause, error, code",
+    [
+        (_fail_with_config, None, QueryErrorCode.CONFIG_INVALID),
+        (_fail_with_budget, None, QueryErrorCode.CONFIG_INVALID),
+        (_fail_with_index, None, QueryErrorCode.INDEX_UNAVAILABLE),
+        (None, ModelUnavailableError("Start Ollama"), QueryErrorCode.MODEL_UNAVAILABLE),
+        (None, ModelResponseError("bad output"), QueryErrorCode.MODEL_INVALID_RESPONSE),
+    ],
+)
+def test_failure_response_keeps_its_code_and_prints_nothing(
+    tmp_path, monkeypatch, capsys, setup, cause, error, code
+):
+    if cause is not None:
+        cause(tmp_path, monkeypatch)
+    setup.error = error
+    capsys.readouterr()
+    response = run_query("What does a 404 status code mean?")
+    assert (response.success, response.error_code) == (False, code)
+    assert response.error_string
+    assert capsys.readouterr() == ("", "")
+
+
+def test_unexpected_rfc_qa_error_is_not_reported_under_a_code(monkeypatch, setup):
+    setup.error = DownloadError("can't happen in a query")
+    with pytest.raises(DownloadError):
+        run_query("What does a 404 status code mean?")
 
 
 def test_budget_that_does_not_fit_fails_before_the_model(tmp_path, monkeypatch, setup):
@@ -513,14 +602,37 @@ def test_main_data_dir_flag_selects_the_index(setup, tmp_path, monkeypatch, caps
     assert "Not found means 404." in capsys.readouterr().out
 
 
-def test_main_data_dir_without_an_index(setup, tmp_path, capsys):
+def test_main_data_dir_without_an_index_prints_once(setup, tmp_path, capsys):
     empty = tmp_path / "empty"
     empty.mkdir()
     assert main(["What does a 404 status code mean?", "--data-dir", str(empty)]) == 1
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert str(empty / "index.db") in captured.err
-    assert "rfc-ingest" in captured.err
+    index = str(empty / "index.db")
+    assert capsys.readouterr() == (
+        "",
+        "Index not found: {p!r}. Run rfc-ingest to build it.\n".format(p=index),
+    )
+
+
+def test_main_failure_response_is_one_stderr_line(setup, capsys):
+    setup.error = ModelUnavailableError("Can't reach Ollama. Start Ollama.")
+    assert main(["What does a 404 status code mean?"]) == 1
+    assert capsys.readouterr() == ("", "Can't reach Ollama. Start Ollama.\n")
+
+
+def test_main_unknown_option_exits_2_with_usage(capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--bogus", "x"])
+    assert excinfo.value.code == 2
+    assert "usage:" in capsys.readouterr().err
+
+
+def test_main_does_not_catch_a_bug(monkeypatch):
+    def broken(*args, **kwargs):
+        raise KeyError("bug")
+
+    monkeypatch.setattr(query, "query", broken)
+    with pytest.raises(KeyError):
+        main(["anything"])
 
 
 # --- Real model (task 4.1) ---
