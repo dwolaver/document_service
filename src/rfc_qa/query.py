@@ -17,12 +17,18 @@ from typing import Any
 
 from rfc_qa import paths
 from rfc_qa.chunk import Chunk
+from rfc_qa.cli import report_error
+from rfc_qa.errors import (
+    ConfigError,
+    IndexUnavailableError,
+    ModelResponseError,
+    ModelUnavailableError,
+    RfcQaError,
+)
 from rfc_qa.generation.answer_generator import (
     NOT_FOUND_ANSWER,
     GenerationResult,
-    ModelResponseError,
     ModelSettings,
-    ModelUnavailableError,
     generate_answer,
 )
 from rfc_qa.retrieval.keyword_index import read_metadata, search
@@ -91,52 +97,40 @@ class QueryResponse:
     error_code: QueryErrorCode | None = None
 
 
-class QueryConfigError(Exception):
-    """An invalid query configuration, with a message naming the value."""
-
-
 @dataclass(frozen=True)
 class QueryConfig:
     retrieval_limit: int
     model: ModelSettings
 
 
-def _log_error(message: object) -> None:
-    print(message, file=sys.stderr)
-
-
-def _is_valid_query(user_query: object) -> bool:
-    return isinstance(user_query, str) and bool(user_query.strip())
-
-
 def _positive_integer(value: object, name: str) -> int:
     # bool is a subclass of int but is not a valid value here.
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise QueryConfigError("Config {n} must be a positive integer, got {v!r}.".format(n=name, v=value))
+        raise ConfigError("Config {n} must be a positive integer, got {v!r}.".format(n=name, v=value))
     return value
 
 
 def _positive_number(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
-        raise QueryConfigError("Config {n} must be a positive number, got {v!r}.".format(n=name, v=value))
+        raise ConfigError("Config {n} must be a positive number, got {v!r}.".format(n=name, v=value))
     return value
 
 
 def _non_empty_string(value: object, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
-        raise QueryConfigError("Config {n} must be a non-empty string, got {v!r}.".format(n=name, v=value))
+        raise ConfigError("Config {n} must be a non-empty string, got {v!r}.".format(n=name, v=value))
     return value
 
 
 def _section(data: dict[str, Any], name: str) -> dict[str, Any]:
     section = data.get(name)
     if not isinstance(section, dict):
-        raise QueryConfigError("Config {n} must be an object, got {v!r}.".format(n=name, v=section))
+        raise ConfigError("Config {n} must be an object, got {v!r}.".format(n=name, v=section))
     return section
 
 
 def load_query_config(path: paths.ConfigFile) -> QueryConfig:
-    """Return the validated configuration, raising :class:`QueryConfigError` if it's invalid.
+    """Return the validated configuration, raising :class:`~rfc_qa.errors.ConfigError` if it's invalid.
 
     ``OLLAMA_BASE_URL``, when set and not empty, replaces ``llm.base_url``. The file must still give
     a valid ``llm.base_url``, so that it stays complete on its own.
@@ -145,9 +139,9 @@ def load_query_config(path: paths.ConfigFile) -> QueryConfig:
         with paths.as_traversable(path).open(encoding="utf-8") as config_file:
             data = json.load(config_file)
     except (OSError, ValueError) as exc:
-        raise QueryConfigError("Failed to read {p!r}: {e}".format(p=str(path), e=exc)) from exc
+        raise ConfigError("Failed to read {p!r}: {e}".format(p=str(path), e=exc)) from exc
     if not isinstance(data, dict):
-        raise QueryConfigError("Config {p!r} must be a JSON object.".format(p=str(path)))
+        raise ConfigError("Config {p!r} must be a JSON object.".format(p=str(path)))
 
     retrieval = _section(data, "retrieval")
     llm = _section(data, "llm")
@@ -199,15 +193,16 @@ def _not_found(timings: Timings) -> QueryResponse:
     return QueryResponse(success=True, answer=NOT_FOUND_ANSWER, found=False, timings=timings)
 
 
-def _chunk_token_target(index_path: str) -> int | None:
-    """Return the index's chunk token target, or ``None`` if the index can't provide it."""
-    metadata = read_metadata(index_path)
-    if metadata is None:
-        return None
+def _chunk_token_target(index_path: str) -> int:
+    """Return the chunk token target the index was built with, raising if it doesn't record one."""
+    value = read_metadata(index_path).get("target_chunk_tokens")
     try:
-        return int(metadata["target_chunk_tokens"])
-    except KeyError, ValueError:
-        return None
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise IndexUnavailableError(
+            "The index at {p!r} doesn't record a usable target_chunk_tokens. "
+            "Rebuild it with `rfc-ingest`.".format(p=index_path)
+        ) from exc
 
 
 def _budget_error(config: QueryConfig, chunk_tokens: int) -> str | None:
@@ -233,35 +228,26 @@ def _citation(chunk: Chunk) -> Citation:
     )
 
 
+def _retrieve(clock: _Clock, index_path: str, user_query: str, limit: int) -> list[Chunk]:
+    start = time.perf_counter()
+    try:
+        return [result.chunk for result in search(index_path, user_query, limit)]
+    finally:
+        clock.retrieval_ms = _elapsed_ms(start)
+
+
 def _answer(user_query: str, config: QueryConfig, index_path: str) -> QueryResponse:
     clock = _Clock()
-
-    chunk_tokens = _chunk_token_target(index_path)
-    if chunk_tokens is None:
-        return _failure(
-            QueryErrorCode.INDEX_UNAVAILABLE,
-            "The index at {p!r} can't be read. Build it with `rfc-ingest`.".format(p=index_path),
-            clock.timings(),
-        )
-    budget_error = _budget_error(config, chunk_tokens)
-    if budget_error is not None:
-        return _failure(QueryErrorCode.CONFIG_INVALID, budget_error, clock.timings())
-
-    retrieval_start = time.perf_counter()
-    results = search(index_path, user_query, config.retrieval_limit)
-    clock.retrieval_ms = _elapsed_ms(retrieval_start)
-    if results is None:
-        return _failure(
-            QueryErrorCode.INDEX_UNAVAILABLE,
-            "The index at {p!r} can't be searched.".format(p=index_path),
-            clock.timings(),
-        )
-    if not results:
-        return _not_found(clock.timings())
-
-    chunks = [result.chunk for result in results]
     try:
+        budget_error = _budget_error(config, _chunk_token_target(index_path))
+        if budget_error is not None:
+            return _failure(QueryErrorCode.CONFIG_INVALID, budget_error, clock.timings())
+        chunks = _retrieve(clock, index_path, user_query, config.retrieval_limit)
+        if not chunks:
+            return _not_found(clock.timings())
         generation = generate_answer(user_query, chunks, config.model)
+    except IndexUnavailableError as exc:
+        return _failure(QueryErrorCode.INDEX_UNAVAILABLE, str(exc), clock.timings())
     except ModelUnavailableError as exc:
         return _failure(QueryErrorCode.MODEL_UNAVAILABLE, str(exc), clock.timings())
     except ModelResponseError as exc:
@@ -287,10 +273,14 @@ def query(user_query: str, *, config_dir: str | None = None, data_dir: str | Non
     ``index.db`` in ``data_dir`` if given, then in the directory named by ``RFC_QA_DATA_DIR``, then in
     the user's data directory for rfc-qa, such as ``~/.local/share/rfc-qa`` on Linux.
 
-    Returns a :class:`QueryResponse`. Expected failures, such as invalid input, a missing index or an
-    unavailable model, are reported through the response rather than raised.
+    Returns a :class:`QueryResponse`. Expected failures, such as an empty query, invalid
+    configuration, a missing index or an unavailable model, are reported through the response
+    rather than raised. A query that isn't a ``str`` is a bug in the caller and raises
+    :class:`TypeError`.
     """
-    if not _is_valid_query(user_query):
+    if not isinstance(user_query, str):
+        raise TypeError("Query must be a str, got {t}.".format(t=type(user_query).__name__))
+    if not user_query.strip():
         return _failure(
             QueryErrorCode.INVALID_QUERY,
             "Query must be a non-empty string with at least one non-whitespace token.",
@@ -298,7 +288,7 @@ def query(user_query: str, *, config_dir: str | None = None, data_dir: str | Non
     try:
         directory = paths.resolve_config_dir(config_dir, explicit_source="config_dir argument")
         config = load_query_config(directory.file(paths.QUERY_CONFIG_FILE))
-    except (paths.ConfigDirError, QueryConfigError) as exc:
+    except ConfigError as exc:
         return _failure(QueryErrorCode.CONFIG_INVALID, str(exc))
     selected_data_dir = paths.resolve_data_dir(data_dir, explicit_source="data_dir argument")
     index_path = selected_data_dir.file(paths.INDEX_FILE)
@@ -350,10 +340,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Resolved here, not in query(), so an error names the flag the user typed.
     try:
         config_dir = paths.resolve_config_dir(args.config_dir)
-    except paths.ConfigDirError as exc:
-        _log_error(str(exc))
-        return 1
-    data_dir = paths.resolve_data_dir(args.data_dir)
+        data_dir = paths.resolve_data_dir(args.data_dir)
+    except RfcQaError as exc:
+        return report_error(exc)
 
     # The packaged defaults have no path to pass on, and query() selects them the same way.
     selected_config_dir = None if config_dir.is_packaged else str(config_dir.location)
@@ -362,8 +351,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_success(response)
         return 0
 
-    _log_error(response.error_string)
-    return 1
+    return report_error(response.error_string)
 
 
 if __name__ == "__main__":

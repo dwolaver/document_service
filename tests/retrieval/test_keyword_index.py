@@ -1,9 +1,11 @@
 import os
+import sqlite3
 
 import pytest
 
 from rfc_qa import paths
 from rfc_qa.chunk import Chunk
+from rfc_qa.errors import IndexBuildError, IndexUnavailableError
 from rfc_qa.retrieval import keyword_index
 from rfc_qa.retrieval.keyword_index import build_index, main, read_metadata, search
 
@@ -33,7 +35,7 @@ CHUNKS = [
 @pytest.fixture
 def index_path(tmp_path):
     path = str(tmp_path / "index.db")
-    assert build_index(CHUNKS, METADATA, path) is True
+    build_index(CHUNKS, METADATA, path)
     return path
 
 
@@ -46,9 +48,8 @@ def _ids(results):
 
 def test_build_writes_a_complete_index(index_path):
     handshake = search(index_path, "handshake", 10)
-    assert handshake is not None and len(handshake) == 2
+    assert len(handshake) == 2
     econnreset = search(index_path, "econnreset")
-    assert econnreset is not None
     assert econnreset[0].chunk == CHUNKS[3]
 
 
@@ -60,22 +61,31 @@ def test_index_records_its_configuration(index_path):
 
 
 def test_build_replaces_an_existing_index(index_path):
-    assert build_index(CHUNKS[:1], METADATA, index_path) is True
+    build_index(CHUNKS[:1], METADATA, index_path)
     assert search(index_path, "econnreset") == []
 
 
 def test_failed_build_leaves_existing_index_and_no_temporary_file(index_path, tmp_path, capsys):
+    capsys.readouterr()
     before = open(index_path, "rb").read()
     duplicate = [CHUNKS[0], CHUNKS[0]]
-    assert build_index(duplicate, METADATA, index_path) is False
+    with pytest.raises(IndexBuildError, match="Failed to build index") as excinfo:
+        build_index(duplicate, METADATA, index_path)
+    assert index_path in str(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, sqlite3.Error)
     assert open(index_path, "rb").read() == before
     assert os.listdir(tmp_path) == ["index.db"]
-    assert "Failed to build index" in capsys.readouterr().err
+    assert capsys.readouterr() == ("", "")
 
 
-def test_build_in_missing_directory_reports_a_failure(tmp_path, capsys):
-    assert build_index(CHUNKS, METADATA, str(tmp_path / "missing" / "index.db")) is False
-    assert "Failed to build index" in capsys.readouterr().err
+def test_build_in_missing_directory_is_an_index_build_error(tmp_path, capsys):
+    path = str(tmp_path / "missing" / "index.db")
+    with pytest.raises(IndexBuildError, match="Failed to build index") as excinfo:
+        build_index(CHUNKS, METADATA, path)
+    assert path in str(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, OSError)
+    assert os.listdir(tmp_path) == []
+    assert capsys.readouterr() == ("", "")
 
 
 # --- Searching (task 4.2) ---
@@ -87,7 +97,6 @@ def test_exact_term_returns_its_chunk_first(index_path):
 
 def test_results_carry_metadata_and_scores(index_path):
     results = search(index_path, "handshake")
-    assert results is not None
     result = results[0]
     assert result.chunk.rfc_title.startswith("RFC ")
     assert result.chunk.section_title
@@ -105,13 +114,13 @@ def test_title_match_ranks_above_body_match(tmp_path):
         _chunk(1, "1", "Other Topic", "congestion " + filler),
         _chunk(2, "1", "Congestion", "unrelated " + filler),
     ]
-    assert build_index(chunks, METADATA, path) is True
+    build_index(chunks, METADATA, path)
     assert _ids(search(path, "congestion"))[0] == "rfc2-s1-p0"
 
 
 def test_limit(index_path):
     results = search(index_path, "the handshake field index", 2)
-    assert results is not None and len(results) == 2
+    assert len(results) == 2
 
 
 def test_zero_limit_returns_nothing(index_path):
@@ -157,20 +166,33 @@ def test_query_with_no_tokens_is_empty(index_path):
     assert search(index_path, "!!! ---") == []
 
 
-def test_missing_index_reports_and_does_not_create_it(tmp_path, capsys):
+@pytest.mark.parametrize("read", [lambda path: search(path, "handshake"), read_metadata])
+def test_missing_index_raises_and_is_not_created(tmp_path, capsys, read):
     path = str(tmp_path / "missing.db")
-    assert search(path, "handshake") is None
+    with pytest.raises(IndexUnavailableError) as excinfo:
+        read(path)
+    assert str(excinfo.value) == "Index not found: {p!r}. Run rfc-ingest to build it.".format(p=path)
     assert not os.path.exists(path)
-    err = capsys.readouterr().err
-    assert "Index not found" in err
-    assert "rfc-ingest" in err
+    assert capsys.readouterr() == ("", "")
 
 
-def test_corrupt_index_reports_a_diagnostic(tmp_path, capsys):
+@pytest.mark.parametrize(
+    "read, action",
+    [(lambda path: search(path, "handshake"), "search"), (read_metadata, "read")],
+)
+def test_unreadable_index_raises_with_the_database_error(tmp_path, capsys, read, action):
     path = tmp_path / "index.db"
-    path.write_bytes(b"this is not a database at all, but it is long enough to be read")
-    assert search(str(path), "handshake") is None
-    assert "Failed to search index" in capsys.readouterr().err
+    content = b"this is not a database at all, but it is long enough to be read"
+    path.write_bytes(content)
+    with pytest.raises(IndexUnavailableError) as excinfo:
+        read(str(path))
+    message = str(excinfo.value)
+    assert message.startswith("Failed to {a} index {p!r}: ".format(a=action, p=str(path)))
+    assert message.endswith("Rebuild it with rfc-ingest.")
+    assert isinstance(excinfo.value.__cause__, sqlite3.Error)
+    assert path.read_bytes() == content
+    assert os.listdir(tmp_path) == ["index.db"]
+    assert capsys.readouterr() == ("", "")
 
 
 # --- Console search (task 4.3) ---
@@ -194,14 +216,32 @@ def test_cli_reports_no_matches(index_path, capsys):
     assert "No matches." in capsys.readouterr().out
 
 
-def test_cli_missing_index_is_non_zero(tmp_path, capsys):
-    assert main(["handshake", "--index", str(tmp_path / "missing.db")]) != 0
-    assert "Index not found" in capsys.readouterr().err
+def test_cli_missing_index_prints_one_line_and_exits_1(tmp_path, capsys):
+    path = str(tmp_path / "missing.db")
+    assert main(["handshake", "--index", path]) == 1
+    assert capsys.readouterr() == ("", "Index not found: {p!r}. Run rfc-ingest to build it.\n".format(p=path))
+
+
+def test_cli_unreadable_index_prints_one_line_and_exits_1(tmp_path, capsys):
+    path = tmp_path / "index.db"
+    path.write_bytes(b"this is not a database at all, but it is long enough to be read")
+    assert main(["handshake", "--index", str(path)]) == 1
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert err.count("\n") == 1
+    assert err.startswith("Failed to search index {p!r}: ".format(p=str(path)))
+
+
+def test_cli_unknown_option_exits_2_with_usage(capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--bogus", "x"])
+    assert excinfo.value.code == 2
+    assert "usage:" in capsys.readouterr().err
 
 
 def _data_dir_with_index(path):
     path.mkdir()
-    assert build_index(CHUNKS, METADATA, str(path / "index.db")) is True
+    build_index(CHUNKS, METADATA, str(path / "index.db"))
     return str(path)
 
 

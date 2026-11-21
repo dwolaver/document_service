@@ -7,12 +7,12 @@ import pytest
 
 import rfc_qa
 from rfc_qa import paths
+from rfc_qa.errors import ConfigError
 from rfc_qa.paths import (
     CONFIG_DIR_ENV,
     DATA_DIR_ENV,
     PACKAGED_CONFIG_SOURCE,
     ConfigDir,
-    ConfigDirError,
     SelectedDir,
     packaged_config_dir,
     resolve_config_dir,
@@ -81,14 +81,17 @@ def test_missing_directory_names_path_and_source(tmp_path, monkeypatch, use_env,
     missing = str(tmp_path / "missing")
     if use_env:
         monkeypatch.setenv(CONFIG_DIR_ENV, missing)
-    with pytest.raises(ConfigDirError) as excinfo:
+    with pytest.raises(ConfigError) as excinfo:
         resolve_config_dir(None if use_env else missing)
     assert missing in str(excinfo.value)
     assert "(from {s})".format(s=source) in str(excinfo.value)
 
 
-def test_config_dir_error_is_a_value_error():
-    assert issubclass(ConfigDirError, ValueError)
+def test_missing_directory_is_not_a_value_error(tmp_path):
+    # A caller's `except ValueError` is for its own bugs, so it mustn't catch a missing directory.
+    with pytest.raises(ConfigError) as excinfo:
+        resolve_config_dir(str(tmp_path / "missing"))
+    assert not isinstance(excinfo.value, ValueError)
 
 
 # --- Data directory ---

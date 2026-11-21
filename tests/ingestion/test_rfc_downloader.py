@@ -1,8 +1,10 @@
 import os
+import tempfile
 
 import pytest
 import requests
 
+from rfc_qa.errors import DownloadError, RfcQaError
 from rfc_qa.ingestion.rfc_downloader import download_rfc
 
 
@@ -44,144 +46,169 @@ def _fail_if_called(monkeypatch):
     monkeypatch.setattr(requests, "get", fake_get)
 
 
-# --- Input validation (task 2.1) ---
+def _assert_failed_cleanly(capsys, tmp_path, name):
+    """Nothing was stored, no temporary file remains and nothing was printed."""
+    assert not (tmp_path / name).exists()
+    assert [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp")] == []
+    assert capsys.readouterr() == ("", "")
 
 
-def test_rejects_non_integer_and_out_of_range(monkeypatch, tmp_path):
+# --- Input validation ---
+
+
+@pytest.mark.parametrize("bad", ["791", None, True, 9110.0])
+def test_non_integer_number_is_a_type_error(monkeypatch, tmp_path, capsys, bad):
     _fail_if_called(monkeypatch)
-    for bad in ["791", None, 0, -5, True, 9110.0]:
-        # A wrong type is the point: download_rfc() must reject it at runtime.
-        assert download_rfc(bad, str(tmp_path)) is False  # type: ignore[arg-type]
+    # A wrong type is the point: download_rfc() must reject it at runtime.
+    with pytest.raises(TypeError, match="Invalid RFC number"):
+        download_rfc(bad, str(tmp_path))
+    assert list(tmp_path.iterdir()) == []
+    assert capsys.readouterr() == ("", "")
 
 
-def test_accepts_valid_integer(monkeypatch, tmp_path):
+@pytest.mark.parametrize("bad", [0, -5])
+def test_number_below_1_is_a_value_error(monkeypatch, tmp_path, capsys, bad):
+    _fail_if_called(monkeypatch)
+    with pytest.raises(ValueError, match="Invalid RFC number {b}".format(b=bad)):
+        download_rfc(bad, str(tmp_path))
+    assert list(tmp_path.iterdir()) == []
+    assert capsys.readouterr() == ("", "")
+
+
+def test_caller_bugs_are_not_rfc_qa_errors(monkeypatch, tmp_path):
+    _fail_if_called(monkeypatch)
+    for bad in ("791", 0):
+        with pytest.raises((TypeError, ValueError)) as excinfo:
+            download_rfc(bad, str(tmp_path))  # type: ignore[arg-type]
+        assert not isinstance(excinfo.value, RfcQaError)
+
+
+def test_accepts_valid_integer_and_returns_the_path(monkeypatch, tmp_path):
     _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY))}))
-    assert download_rfc(9110, str(tmp_path)) is True
+    assert download_rfc(9110, str(tmp_path)) == str(tmp_path / "rfc9110.txt")
     assert (tmp_path / "rfc9110.txt").read_bytes() == MODERN_BODY
 
 
-# --- Missing directory (task 2.2) ---
+# --- Missing directory ---
 
 
-def test_missing_directory_returns_false_and_not_created(monkeypatch, tmp_path):
+def test_missing_directory_is_a_download_error_and_not_created(monkeypatch, tmp_path, capsys):
     _fail_if_called(monkeypatch)
     missing = tmp_path / "does_not_exist"
-    assert download_rfc(9110, str(missing)) is False
+    with pytest.raises(
+        DownloadError, match=r"RFC 9110: destination directory does not exist: .*does_not_exist"
+    ):
+        download_rfc(9110, str(missing))
     assert not missing.exists()
+    assert capsys.readouterr() == ("", "")
 
 
-# --- Idempotent skip (task 3.1) ---
+# --- Idempotent skip ---
 
 
-def test_skips_download_when_file_exists(monkeypatch, tmp_path):
+def test_existing_file_returns_its_path_without_a_request(monkeypatch, tmp_path):
     (tmp_path / "rfc9110.txt").write_bytes(b"already here")
     _fail_if_called(monkeypatch)
-    assert download_rfc(9110, str(tmp_path)) is True
+    assert download_rfc(9110, str(tmp_path)) == str(tmp_path / "rfc9110.txt")
     assert (tmp_path / "rfc9110.txt").read_bytes() == b"already here"
 
 
-# --- Fetch errors (tasks 4.1, 4.2) ---
+# --- Fetch errors ---
 
 
-def test_network_error_returns_false(monkeypatch, tmp_path):
-    _patch_get(monkeypatch, exc=requests.RequestException("boom"))
-    assert download_rfc(9110, str(tmp_path)) is False
-    assert not (tmp_path / "rfc9110.txt").exists()
+def test_network_error_is_the_cause(monkeypatch, tmp_path, capsys):
+    error = requests.ConnectionError("boom")
+    _patch_get(monkeypatch, exc=error)
+    with pytest.raises(DownloadError, match="^RFC 9110: download failed: boom$") as excinfo:
+        download_rfc(9110, str(tmp_path))
+    assert excinfo.value.__cause__ is error
+    _assert_failed_cleanly(capsys, tmp_path, "rfc9110.txt")
 
 
-def test_non_200_returns_false(monkeypatch, tmp_path):
+def test_non_200_names_the_status(monkeypatch, tmp_path, capsys):
     _patch_get(monkeypatch, FakeResponse(404, b"404 - Not found"))
-    assert download_rfc(99999, str(tmp_path)) is False
-    assert not (tmp_path / "rfc99999.txt").exists()
+    with pytest.raises(DownloadError, match=r"^RFC 99999: unexpected HTTP status 404\.$"):
+        download_rfc(99999, str(tmp_path))
+    _assert_failed_cleanly(capsys, tmp_path, "rfc99999.txt")
 
 
-# --- Verification (task 4.3) ---
+# --- Verification ---
 
 
 def test_modern_header_accepted(monkeypatch, tmp_path):
     _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY))}))
-    assert download_rfc(9110, str(tmp_path)) is True
+    assert download_rfc(9110, str(tmp_path)) == str(tmp_path / "rfc9110.txt")
 
 
 def test_classic_header_accepted(monkeypatch, tmp_path):
     _patch_get(monkeypatch, FakeResponse(200, CLASSIC_BODY, {"Content-Length": str(len(CLASSIC_BODY))}))
-    assert download_rfc(791, str(tmp_path)) is True
+    assert download_rfc(791, str(tmp_path)) == str(tmp_path / "rfc791.txt")
 
 
-def test_truncated_body_rejected(monkeypatch, tmp_path):
-    _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY) + 50)}))
-    assert download_rfc(9110, str(tmp_path)) is False
-    assert not (tmp_path / "rfc9110.txt").exists()
+def test_truncated_body_gives_both_sizes(monkeypatch, tmp_path, capsys):
+    declared = len(MODERN_BODY) + 50
+    _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(declared)}))
+    with pytest.raises(DownloadError) as excinfo:
+        download_rfc(9110, str(tmp_path))
+    assert str(excinfo.value) == "RFC 9110: truncated download (Content-Length {d}, received {r}).".format(
+        d=declared, r=len(MODERN_BODY)
+    )
+    assert list(tmp_path.iterdir()) == []
+    assert capsys.readouterr() == ("", "")
 
 
-def test_wrong_number_header_rejected(monkeypatch, tmp_path):
+def test_wrong_number_header_rejected(monkeypatch, tmp_path, capsys):
     _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY))}))
-    assert download_rfc(9999, str(tmp_path)) is False
-    assert not (tmp_path / "rfc9999.txt").exists()
+    with pytest.raises(DownloadError, match="^RFC 9999: document header does not identify the requested RFC"):
+        download_rfc(9999, str(tmp_path))
+    _assert_failed_cleanly(capsys, tmp_path, "rfc9999.txt")
 
 
-def test_empty_body_rejected(monkeypatch, tmp_path):
+def test_empty_body_rejected(monkeypatch, tmp_path, capsys):
     _patch_get(monkeypatch, FakeResponse(200, b"", {}))
-    assert download_rfc(9110, str(tmp_path)) is False
+    with pytest.raises(DownloadError, match="^RFC 9110: empty response body"):
+        download_rfc(9110, str(tmp_path))
+    _assert_failed_cleanly(capsys, tmp_path, "rfc9110.txt")
 
 
 def test_verification_passes_without_content_length(monkeypatch, tmp_path):
     _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {}))
-    assert download_rfc(9110, str(tmp_path)) is True
+    assert download_rfc(9110, str(tmp_path)) == str(tmp_path / "rfc9110.txt")
 
 
-# --- Atomic storage (tasks 5.1, 5.2) ---
+# --- Atomic storage ---
 
 
 def test_final_file_contains_full_bytes(monkeypatch, tmp_path):
     _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY))}))
-    assert download_rfc(9110, str(tmp_path)) is True
+    download_rfc(9110, str(tmp_path))
     assert (tmp_path / "rfc9110.txt").read_bytes() == MODERN_BODY
 
 
-def test_no_temp_left_after_verification_failure(monkeypatch, tmp_path):
-    _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY) + 50)}))
-    assert download_rfc(9110, str(tmp_path)) is False
-    assert list(tmp_path.iterdir()) == []
-
-
-def test_no_temp_left_after_write_failure(monkeypatch, tmp_path):
+def test_write_failure_is_the_cause_and_leaves_no_temp(monkeypatch, tmp_path, capsys):
     _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY))}))
+    error = OSError("replace failed")
 
     def boom(src, dst):
-        raise OSError("replace failed")
+        raise error
 
     monkeypatch.setattr(os, "replace", boom)
-    assert download_rfc(9110, str(tmp_path)) is False
-    assert not (tmp_path / "rfc9110.txt").exists()
-    assert [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp")] == []
+    with pytest.raises(DownloadError, match="^RFC 9110: failed to store file: replace failed$") as excinfo:
+        download_rfc(9110, str(tmp_path))
+    assert excinfo.value.__cause__ is error
+    _assert_failed_cleanly(capsys, tmp_path, "rfc9110.txt")
 
 
-# --- End-to-end across paths with a mocked HTTP layer (task 6.1) ---
-
-
-def test_end_to_end_paths(monkeypatch, tmp_path):
-    # success
+def test_unwritable_directory_is_a_download_error(monkeypatch, tmp_path, capsys):
     _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY))}))
-    assert download_rfc(9110, str(tmp_path)) is True
-    assert (tmp_path / "rfc9110.txt").exists()
 
-    # skip-existing (no network)
-    _fail_if_called(monkeypatch)
-    assert download_rfc(9110, str(tmp_path)) is True
+    def no_temp_file(**kwargs):
+        raise PermissionError("denied")
 
-    # missing directory
-    assert download_rfc(9110, str(tmp_path / "nope")) is False
-
-    # non-200
-    _patch_get(monkeypatch, FakeResponse(404, b"404 - Not found"))
-    assert download_rfc(99999, str(tmp_path)) is False
-    assert not (tmp_path / "rfc99999.txt").exists()
-
-    # verification failure
-    _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY))}))
-    assert download_rfc(9999, str(tmp_path)) is False
-    assert not (tmp_path / "rfc9999.txt").exists()
+    monkeypatch.setattr(tempfile, "mkstemp", no_temp_file)
+    with pytest.raises(DownloadError, match="^RFC 9110: failed to store file: denied$"):
+        download_rfc(9110, str(tmp_path))
+    _assert_failed_cleanly(capsys, tmp_path, "rfc9110.txt")
 
 
 # --- Network-gated integration (task 4.4) ---
@@ -193,7 +220,7 @@ def test_end_to_end_paths(monkeypatch, tmp_path):
     reason="set RFC_DOWNLOADER_NETWORK_TESTS=1 to run network integration tests",
 )
 def test_real_download_passes_verification(tmp_path):
-    assert download_rfc(791, str(tmp_path)) is True
+    assert download_rfc(791, str(tmp_path)) == str(tmp_path / "rfc791.txt")
     content = (tmp_path / "rfc791.txt").read_bytes()
     assert content
     assert b"791" in content[:4096]
