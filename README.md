@@ -32,7 +32,7 @@ Some of the decisions that shaped the result:
 
 [How this was built](docs/how-it-was-built.md) has the full account and every decision. The record
 is public: the [archived proposals and designs](openspec/changes/archive/) show each decision with
-its reasons, and the [pull requests](https://github.com/dwolaver/document_service/pulls?q=is%3Apr)
+its reasons, and the [pull requests](https://github.com/dwolaver/rfc-qa/pulls?q=is%3Apr)
 show the reviews.
 
 ## Approach

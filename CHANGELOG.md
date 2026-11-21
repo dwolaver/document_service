@@ -74,5 +74,5 @@ All notable changes to this project are recorded here. The format follows
 - CI that runs the tests on every pull request, and a check that a pull request's OpenSpec change
   is archived before it merges.
 
-[Unreleased]: https://github.com/dwolaver/document_service/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/dwolaver/document_service/releases/tag/v0.1.0
+[Unreleased]: https://github.com/dwolaver/rfc-qa/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/dwolaver/rfc-qa/releases/tag/v0.1.0
