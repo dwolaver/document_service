@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import pathlib
 import shutil
@@ -16,6 +17,7 @@ from rfc_qa.ingestion.ingest import (
     run_ingestion,
 )
 from rfc_qa.retrieval.keyword_index import read_metadata, search
+from tests.conftest import split_stderr
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -499,3 +501,66 @@ def test_missing_data_directory_is_created(workspace, tmp_path, monkeypatch):
     monkeypatch.setenv(paths.DATA_DIR_ENV, str(data_dir))
     assert main(["--corpus", workspace["corpus"], "--config", workspace["config"]]) == 0
     assert sorted(os.listdir(data_dir)) == ["index.db", "rfcs"]
+
+
+# --- Logging ---
+
+
+def test_ingestion_is_logged(workspace, caplog):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    summary = _run(workspace)
+    records = [(r.levelno, r.getMessage()) for r in caplog.records if r.name == "rfc_qa.ingestion.ingest"]
+    assert records[0] == (logging.INFO, f"2 RFCs in the manifest {workspace['corpus']!r}")
+    assert records[-1] == (logging.INFO, f"Chunked 2 RFCs into {summary.chunk_count} chunks")
+    per_rfc = [message for level, message in records[1:-1]]
+    assert [message.split(":")[0] for message in per_rfc] == ["RFC 793", "RFC 9110"]
+    assert all(level == logging.DEBUG for level, _ in records[1:-1])
+    chunk_counts = [int(message.split(", ")[1].split()[0]) for message in per_rfc]
+    assert sum(chunk_counts) == summary.chunk_count
+
+
+def test_failed_ingestion_is_raised_not_logged(workspace, monkeypatch, caplog):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    monkeypatch.setattr(ingest, "download_rfc", _failing_download)
+    with pytest.raises(DownloadError) as excinfo:
+        _run(workspace)
+    assert all(str(excinfo.value) not in record.getMessage() for record in caplog.records)
+
+
+# --- -v ---
+
+
+def test_ingest_is_quiet_without_v(workspace, capsys):
+    assert main(_main_args(workspace)) == 0
+    assert capsys.readouterr().err == ""
+
+
+def test_ingest_v_shows_progress_on_stderr_only(workspace, capsys):
+    assert main(_main_args(workspace)) == 0
+    quiet_out = capsys.readouterr().out
+    os.remove(workspace["index"])
+    assert main([*_main_args(workspace), "-v"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == quiet_out
+    levels, other = split_stderr(captured.err)
+    assert other == []
+    assert set(levels) == {"INFO"}
+    assert "Writing" in captured.err and workspace["index"] in captured.err
+
+
+def test_ingest_vv_adds_detail(workspace, capsys):
+    assert main([*_main_args(workspace), "-vv"]) == 0
+    levels, other = split_stderr(capsys.readouterr().err)
+    assert other == []
+    assert {"INFO", "DEBUG"} <= set(levels)
+
+
+def test_ingest_v_failure_ends_with_the_error_once(workspace, monkeypatch, capsys):
+    monkeypatch.setattr(ingest, "download_rfc", _failing_download)
+    assert main([*_main_args(workspace), "-v"]) == 1
+    captured = capsys.readouterr()
+    levels, other = split_stderr(captured.err)
+    assert levels and other == ["RFC 793: unexpected HTTP status 503."]
+    assert captured.err.endswith("RFC 793: unexpected HTTP status 503.\n")
+    assert captured.err.count("unexpected HTTP status 503") == 1
+    assert captured.out == ""

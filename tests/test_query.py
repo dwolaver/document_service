@@ -1,5 +1,7 @@
 import json
+import logging
 import os
+import re
 
 import pytest
 
@@ -16,6 +18,7 @@ from rfc_qa.generation import answer_generator
 from rfc_qa.query import QueryErrorCode, QueryResponse, Timings, load_query_config, main
 from rfc_qa.query import query as run_query
 from rfc_qa.retrieval.keyword_index import build_index
+from tests.conftest import split_stderr
 
 CONFIG = {
     "retrieval": {"limit": 3},
@@ -651,3 +654,92 @@ def test_real_model_answers_a_corpus_question():
     assert {c.rfc_number for c in response.citations} & {9110, 7231, 2616}
     assert response.timings is not None and response.timings.prompt_tokens is not None
     assert response.timings.prompt_tokens > 0
+
+
+# --- Logging ---
+
+
+def _query_records(caplog, level=None):
+    return [
+        r.getMessage()
+        for r in caplog.records
+        if r.name == "rfc_qa.query" and (level is None or r.levelno == level)
+    ]
+
+
+def test_answered_query_is_logged(setup, caplog):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    run_query("What does a 404 status code mean?")
+    progress = _query_records(caplog, logging.INFO)
+    assert len(progress) == 2
+    assert re.fullmatch(r"Retrieved 2 passages in \d+ ms", progress[0])
+    assert re.fullmatch(r"The model answered in \d+ ms, citing 1 of 2 passages", progress[1])
+
+
+def test_not_found_by_the_model_is_logged(setup, caplog):
+    caplog.set_level(logging.INFO, logger="rfc_qa")
+    setup.result = answer_generator.GenerationResult(found=False, answer=None, model_load_ms=2)
+    run_query("What does a 404 status code mean?")
+    assert re.fullmatch(r"The model found no answer in the passages, in \d+ ms", _query_records(caplog)[-1])
+
+
+def test_nothing_retrieved_is_logged_without_a_model_record(setup, caplog):
+    caplog.set_level(logging.INFO, logger="rfc_qa")
+    run_query("zzzzqqqq")
+    progress = _query_records(caplog)
+    assert len(progress) == 1
+    assert re.fullmatch(r"Retrieved 0 passages in \d+ ms", progress[0])
+
+
+def test_query_detail_is_logged(setup, tmp_path, data_dir, caplog):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    run_query("What does a 404 status code mean?")
+    detail = _query_records(caplog, logging.DEBUG)
+    assert f"Query configuration {str(tmp_path / 'query.json')!r}" in detail
+    assert f"Index {os.path.join(data_dir, 'index.db')!r}" in detail
+    assert "Context budget: 4324 of 8192 tokens (llm.num_ctx)" in detail
+
+
+def test_query_failure_is_returned_not_logged(tmp_path, monkeypatch, setup, caplog):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    monkeypatch.setenv(paths.DATA_DIR_ENV, str(tmp_path / "missing"))
+    response = run_query("What does 404 mean?")
+    assert response.error_string
+    assert all(response.error_string not in record.getMessage() for record in caplog.records)
+
+
+# --- -v ---
+
+
+def test_main_is_quiet_without_v(setup, capsys):
+    assert main(["What does a 404 status code mean?"]) == 0
+    assert capsys.readouterr().err == ""
+
+
+def test_main_v_shows_progress_on_stderr_only(setup, capsys):
+    assert main(["What does a 404 status code mean?"]) == 0
+    quiet_out = capsys.readouterr().out
+    assert main(["What does a 404 status code mean?", "-v"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == quiet_out
+    levels, other = split_stderr(captured.err)
+    assert other == [] and levels == ["INFO", "INFO"]
+    assert "Retrieved 2 passages" in captured.err and "The model answered" in captured.err
+
+
+def test_main_vv_adds_detail(setup, capsys):
+    assert main(["What does a 404 status code mean?", "-vv"]) == 0
+    captured = capsys.readouterr()
+    levels, other = split_stderr(captured.err)
+    assert other == [] and {"INFO", "DEBUG"} <= set(levels)
+    assert "DEBUG rfc_qa.paths: Configuration directory" in captured.err
+
+
+def test_main_v_failure_ends_with_the_error_once(setup, capsys):
+    setup.error = ModelUnavailableError("Can't reach Ollama. Start Ollama.")
+    assert main(["What does a 404 status code mean?", "-v"]) == 1
+    captured = capsys.readouterr()
+    levels, other = split_stderr(captured.err)
+    assert levels == ["INFO"] and other == ["Can't reach Ollama. Start Ollama."]
+    assert captured.err.endswith("Can't reach Ollama. Start Ollama.\n")
+    assert captured.out == ""

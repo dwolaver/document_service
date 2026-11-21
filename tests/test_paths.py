@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 from pathlib import Path
@@ -150,3 +151,42 @@ def test_data_files_are_named_in_the_data_directory():
     data_dir = resolve_data_dir()
     assert data_dir.file(paths.INDEX_FILE) == os.path.join(paths.default_data_dir(), "index.db")
     assert data_dir.file(paths.RFCS_FOLDER) == os.path.join(paths.default_data_dir(), "rfcs")
+
+
+# --- Logging ---
+
+
+def _path_records(caplog):
+    return [(r.levelno, r.getMessage()) for r in caplog.records if r.name == "rfc_qa.paths"]
+
+
+@pytest.mark.parametrize("use_flag, use_env", [(True, True), (False, True), (False, False)])
+def test_selected_config_directory_is_logged(dirs, monkeypatch, caplog, use_flag, use_env):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    if use_env:
+        monkeypatch.setenv(CONFIG_DIR_ENV, dirs[1])
+    selected = resolve_config_dir(dirs[0] if use_flag else None)
+    location = str(selected.location)
+    expected_source = "--config-dir" if use_flag else CONFIG_DIR_ENV if use_env else PACKAGED_CONFIG_SOURCE
+    assert _path_records(caplog) == [
+        (logging.DEBUG, f"Configuration directory {location!r} (from {expected_source})")
+    ]
+
+
+@pytest.mark.parametrize("use_flag, use_env", [(True, True), (False, True), (False, False)])
+def test_selected_data_directory_is_logged(dirs, monkeypatch, caplog, use_flag, use_env):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    if use_env:
+        monkeypatch.setenv(DATA_DIR_ENV, dirs[1])
+    selected = resolve_data_dir(dirs[0] if use_flag else None)
+    expected_source = "--data-dir" if use_flag else DATA_DIR_ENV if use_env else "default"
+    assert _path_records(caplog) == [
+        (logging.DEBUG, f"Data directory {selected.path!r} (from {expected_source})")
+    ]
+
+
+def test_missing_config_directory_is_raised_not_logged(tmp_path, caplog):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    with pytest.raises(ConfigError):
+        resolve_config_dir(str(tmp_path / "missing"))
+    assert _path_records(caplog) == []

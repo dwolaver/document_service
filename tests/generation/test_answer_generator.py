@@ -1,4 +1,5 @@
 import json
+import logging
 
 import pytest
 import requests
@@ -280,3 +281,32 @@ def test_missing_durations_are_none(model):
 
 def test_not_found_answer_text():
     assert NOT_FOUND_ANSWER == "The indexed RFCs don't answer this question."
+
+
+# --- Logging ---
+
+
+def test_model_call_is_logged_without_the_prompt(model, caplog):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    generate_answer("What does 404 mean?", CHUNKS, SETTINGS)
+    records = [
+        (r.levelno, r.getMessage()) for r in caplog.records if r.name == "rfc_qa.generation.answer_generator"
+    ]
+    assert records == [
+        (logging.DEBUG, "Asking model 'llama3.2' at http://localhost:11434/api/chat with 3 passages"),
+        (
+            logging.DEBUG,
+            "Model reported 1200 prompt tokens and 49 answer tokens, loaded in 2 ms, generated in 48 ms",
+        ),
+    ]
+    prompt = model.requests[0]["body"]["messages"][1]["content"]
+    assert all(prompt not in record.getMessage() for record in caplog.records)
+    assert all("Not found text." not in record.getMessage() for record in caplog.records)
+
+
+def test_model_failure_is_raised_not_logged(model, caplog):
+    caplog.set_level(logging.DEBUG, logger="rfc_qa")
+    model.response = requests.ConnectionError("refused")
+    with pytest.raises(ModelUnavailableError) as excinfo:
+        generate_answer("What does 404 mean?", CHUNKS, SETTINGS)
+    assert all(str(excinfo.value) not in record.getMessage() for record in caplog.records)

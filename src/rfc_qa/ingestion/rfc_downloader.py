@@ -1,6 +1,7 @@
 """Download IETF RFCs by number, verify them, and store them atomically on disk."""
 
 import contextlib
+import logging
 import os
 import re
 import tempfile
@@ -9,6 +10,8 @@ from collections.abc import Mapping
 import requests
 
 from rfc_qa.errors import DownloadError
+
+logger = logging.getLogger(__name__)
 
 # (connect timeout, read timeout) in seconds.
 HTTP_TIMEOUT = (10, 30)
@@ -97,9 +100,11 @@ def download_rfc(rfc_number: int, directory: str) -> str:
 
     dest_path = os.path.join(directory, f"rfc{rfc_number}.txt")
     if os.path.exists(dest_path):
+        logger.debug("RFC %d is already stored at %r", rfc_number, dest_path)
         return dest_path
 
     url = _rfc_url(rfc_number)
+    logger.info("Downloading RFC %d from %s", rfc_number, url)
     try:
         response = requests.get(url, headers=_REQUEST_HEADERS, timeout=HTTP_TIMEOUT)
     except requests.RequestException as exc:
@@ -111,4 +116,5 @@ def download_rfc(rfc_number: int, directory: str) -> str:
     content = response.content
     _verify(content, response.headers, rfc_number)
     _atomic_write(content, directory, dest_path, rfc_number)
+    logger.debug("Stored %d bytes of RFC %d at %r", len(content), rfc_number, dest_path)
     return dest_path

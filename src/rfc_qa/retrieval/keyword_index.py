@@ -1,6 +1,7 @@
 """Build and search the keyword index. All SQL in the project stays in this module."""
 
 import argparse
+import logging
 import os
 import pathlib
 import re
@@ -12,8 +13,10 @@ from dataclasses import dataclass
 
 from rfc_qa import paths
 from rfc_qa.chunk import Chunk
-from rfc_qa.cli import report_error
+from rfc_qa.cli import add_verbose_argument, configure_logging, report_error
 from rfc_qa.errors import IndexBuildError, IndexUnavailableError, RfcQaError
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_LIMIT = 5
 
@@ -92,6 +95,8 @@ def build_index(chunks: Iterable[Chunk], metadata: Mapping[str, object], path: s
     Raises :class:`~rfc_qa.errors.IndexBuildError` on failure, leaving any existing index
     unchanged and no temporary file behind.
     """
+    chunks = list(chunks)
+    logger.info("Writing %d chunks to the index at %r", len(chunks), path)
     tmp_path: str | None = None
     try:
         tmp_fd, tmp_path = tempfile.mkstemp(
@@ -150,15 +155,17 @@ def search(path: str, query_text: str, limit: int = DEFAULT_LIMIT) -> list[Searc
     connection = _connect_read_only(path)
     try:
         expression = _to_match_expression(query_text)
-        if not expression or limit <= 0:
-            return []
-        rows = connection.execute(_SEARCH_SQL, (_TITLE_WEIGHT, _TEXT_WEIGHT, expression, limit))
-        # bm25() is more negative for better matches.
-        return [SearchResult(Chunk(*row[:7]), -row[7]) for row in rows]
+        results: list[SearchResult] = []
+        if expression and limit > 0:
+            rows = connection.execute(_SEARCH_SQL, (_TITLE_WEIGHT, _TEXT_WEIGHT, expression, limit))
+            # bm25() is more negative for better matches.
+            results = [SearchResult(Chunk(*row[:7]), -row[7]) for row in rows]
     except sqlite3.Error as exc:
         raise _unreadable("search", path, exc) from exc
     finally:
         connection.close()
+    logger.debug("Searched %r for %r (limit %d): %d results", path, query_text, limit, len(results))
+    return results
 
 
 def _excerpt(text: str) -> str:
@@ -180,7 +187,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--index", help="Path to the index file, instead of the one in the data directory.")
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="Maximum results.")
+    add_verbose_argument(parser)
     args = parser.parse_args(argv)
+    configure_logging(args.verbose)
 
     index_path = args.index
     if index_path is None:

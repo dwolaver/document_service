@@ -7,6 +7,7 @@ or left unchanged.
 
 import argparse
 import json
+import logging
 import os
 import sys
 from collections.abc import Sequence
@@ -15,12 +16,14 @@ from typing import Any, TypeGuard
 
 from rfc_qa import paths
 from rfc_qa.chunk import Chunk
-from rfc_qa.cli import report_error
+from rfc_qa.cli import add_verbose_argument, configure_logging, report_error
 from rfc_qa.errors import ConfigError, IngestError, RfcQaError
 from rfc_qa.ingestion.chunker import chunk_sections
 from rfc_qa.ingestion.rfc_downloader import download_rfc
 from rfc_qa.ingestion.rfc_parser import parse_rfc
 from rfc_qa.retrieval.keyword_index import build_index
+
+logger = logging.getLogger(__name__)
 
 FAMILIES = ("http", "tls", "tcp")
 
@@ -161,6 +164,7 @@ def _chunk_rfc(entry: CorpusEntry, rfc_dir: str, max_chunk_chars: int) -> list[C
     chunks = chunk_sections(sections, entry.number, entry.title, entry.family, max_chunk_chars)
     if not chunks:
         raise IngestError(f"RFC {entry.number}: produced no chunks.")
+    logger.debug("RFC %d: %d sections, %d chunks", entry.number, len(sections), len(chunks))
     return chunks
 
 
@@ -175,6 +179,7 @@ def run_ingestion(
     :class:`~rfc_qa.errors.IndexBuildError` if the index can't be written.
     """
     entries = load_corpus(corpus_path)
+    logger.info("%d RFCs in the manifest %r", len(entries), str(corpus_path))
     config = load_config(config_path)
     rfc_dir = os.path.join(data_dir, paths.RFCS_FOLDER)
     _ensure_downloaded(entries, rfc_dir)
@@ -182,6 +187,7 @@ def run_ingestion(
     chunks: list[Chunk] = []
     for entry in entries:
         chunks.extend(_chunk_rfc(entry, rfc_dir, config.max_chunk_chars))
+    logger.info("Chunked %d RFCs into %d chunks", len(entries), len(chunks))
 
     build_index(chunks, config.as_metadata(), os.path.join(data_dir, paths.INDEX_FILE))
     return IngestSummary(len(entries), len(chunks), max(len(chunk.text) for chunk in chunks))
@@ -223,7 +229,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         help=f"Directory for the downloaded RFCs and the index. Defaults to ${paths.DATA_DIR_ENV}, then the "
         f"user data directory ({default_data_dir}).",
     )
+    add_verbose_argument(parser)
     args = parser.parse_args(argv)
+    configure_logging(args.verbose)
 
     try:
         corpus_path, config_path = _input_paths(args)
