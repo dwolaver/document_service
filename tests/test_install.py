@@ -135,7 +135,7 @@ def _seed_corpus(install: Install) -> int:
     rfcs = install.data_home / "rfc-qa" / "rfcs"
     rfcs.mkdir(parents=True)
     for number in numbers:
-        shutil.copy(FIXTURE_RFC, rfcs / "rfc{n}.txt".format(n=number))
+        shutil.copy(FIXTURE_RFC, rfcs / f"rfc{number}.txt")
     return len(numbers)
 
 
@@ -144,7 +144,7 @@ def test_commands_run_with_the_packaged_defaults(install):
 
     ingested = install.run("rfc-ingest")
     assert ingested.returncode == 0, ingested.stderr
-    assert "Indexed {n} RFCs".format(n=count) in ingested.stdout
+    assert f"Indexed {count} RFCs" in ingested.stdout
     assert (install.data_home / "rfc-qa" / "index.db").is_file()
 
     searched = install.run("rfc-search", "Hypertext Transfer Protocol")
@@ -154,5 +154,5 @@ def test_commands_run_with_the_packaged_defaults(install):
     # The configuration and the index are both found, so the query only fails at the model.
     asked = install.run("rfc-query", "What is the Hypertext Transfer Protocol?")
     assert asked.returncode == 1
-    assert "Can't reach Ollama at {u}".format(u=UNREACHABLE_OLLAMA) in asked.stderr
+    assert f"Can't reach Ollama at {UNREACHABLE_OLLAMA}" in asked.stderr
     assert list(install.work.iterdir()) == []

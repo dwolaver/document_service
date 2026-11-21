@@ -209,7 +209,7 @@ def test_abstract_ends_before_status_memo():
     ],
 )
 def test_back_matter_does_not_attach_to_the_last_section(heading):
-    text = "1.  Last Section\n\n   Body text.\n\n{h}\n\n   Back matter.\n".format(h=heading)
+    text = f"1.  Last Section\n\n   Body text.\n\n{heading}\n\n   Back matter.\n"
     sections = parse_rfc(text)
     assert len(sections) == 1
     assert "Back matter" not in sections[0].text

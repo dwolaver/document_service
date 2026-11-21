@@ -14,9 +14,9 @@ METADATA = {"embedding_model_name": "nomic-embed-text", "max_chunk_chars": 2970}
 
 def _chunk(number, section, title, text):
     return Chunk(
-        "rfc{n}-s{s}-p0".format(n=number, s=section),
+        f"rfc{number}-s{section}-p0",
         number,
-        "RFC {n}".format(n=number),
+        f"RFC {number}",
         "tcp",
         section,
         title,
@@ -171,7 +171,7 @@ def test_missing_index_raises_and_is_not_created(tmp_path, capsys, read):
     path = str(tmp_path / "missing.db")
     with pytest.raises(IndexUnavailableError) as excinfo:
         read(path)
-    assert str(excinfo.value) == "Index not found: {p!r}. Run rfc-ingest to build it.".format(p=path)
+    assert str(excinfo.value) == f"Index not found: {path!r}. Run rfc-ingest to build it."
     assert not os.path.exists(path)
     assert capsys.readouterr() == ("", "")
 
@@ -187,7 +187,7 @@ def test_unreadable_index_raises_with_the_database_error(tmp_path, capsys, read,
     with pytest.raises(IndexUnavailableError) as excinfo:
         read(str(path))
     message = str(excinfo.value)
-    assert message.startswith("Failed to {a} index {p!r}: ".format(a=action, p=str(path)))
+    assert message.startswith(f"Failed to {action} index {str(path)!r}: ")
     assert message.endswith("Rebuild it with rfc-ingest.")
     assert isinstance(excinfo.value.__cause__, sqlite3.Error)
     assert path.read_bytes() == content
@@ -219,7 +219,7 @@ def test_cli_reports_no_matches(index_path, capsys):
 def test_cli_missing_index_prints_one_line_and_exits_1(tmp_path, capsys):
     path = str(tmp_path / "missing.db")
     assert main(["handshake", "--index", path]) == 1
-    assert capsys.readouterr() == ("", "Index not found: {p!r}. Run rfc-ingest to build it.\n".format(p=path))
+    assert capsys.readouterr() == ("", f"Index not found: {path!r}. Run rfc-ingest to build it.\n")
 
 
 def test_cli_unreadable_index_prints_one_line_and_exits_1(tmp_path, capsys):
@@ -229,7 +229,7 @@ def test_cli_unreadable_index_prints_one_line_and_exits_1(tmp_path, capsys):
     out, err = capsys.readouterr()
     assert out == ""
     assert err.count("\n") == 1
-    assert err.startswith("Failed to search index {p!r}: ".format(p=str(path)))
+    assert err.startswith(f"Failed to search index {str(path)!r}: ")
 
 
 def test_cli_unknown_option_exits_2_with_usage(capsys):

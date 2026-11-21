@@ -84,7 +84,7 @@ def test_missing_directory_names_path_and_source(tmp_path, monkeypatch, use_env,
     with pytest.raises(ConfigError) as excinfo:
         resolve_config_dir(None if use_env else missing)
     assert missing in str(excinfo.value)
-    assert "(from {s})".format(s=source) in str(excinfo.value)
+    assert f"(from {source})" in str(excinfo.value)
 
 
 def test_missing_directory_is_not_a_value_error(tmp_path):

@@ -314,7 +314,7 @@ def test_non_string_query_is_a_type_error(monkeypatch, bad, name):
     monkeypatch.setattr(paths, "resolve_config_dir", must_not_read)
     monkeypatch.setattr(query, "read_metadata", must_not_read)
     # A wrong type is the point: query() must reject it at runtime.
-    with pytest.raises(TypeError, match="^Query must be a str, got {n}\\.$".format(n=name)):
+    with pytest.raises(TypeError, match=f"^Query must be a str, got {name}\\.$"):
         run_query(bad)
 
 
@@ -372,9 +372,10 @@ def test_index_without_a_usable_chunk_token_target(tmp_path, monkeypatch, setup,
     monkeypatch.setenv(paths.DATA_DIR_ENV, data_dir)
     response = run_query("What does 404 mean?")
     assert response.error_code is QueryErrorCode.INDEX_UNAVAILABLE
+    index = os.path.join(data_dir, "index.db")
     assert response.error_string == (
-        "The index at {p!r} doesn't record a usable target_chunk_tokens. Rebuild it with `rfc-ingest`."
-    ).format(p=os.path.join(data_dir, "index.db"))
+        f"The index at {index!r} doesn't record a usable target_chunk_tokens. Rebuild it with `rfc-ingest`."
+    )
     assert setup.calls == []
 
 
@@ -393,7 +394,7 @@ def test_unreadable_index(tmp_path, monkeypatch, setup):
 
 def test_search_failure_is_index_unavailable_with_retrieval_timing(monkeypatch, setup):
     def broken_search(path, text, limit):
-        raise IndexUnavailableError("Failed to search index {p!r}: disk I/O error.".format(p=path))
+        raise IndexUnavailableError(f"Failed to search index {path!r}: disk I/O error.")
 
     monkeypatch.setattr(query, "search", broken_search)
     response = run_query("What does 404 mean?")
@@ -609,7 +610,7 @@ def test_main_data_dir_without_an_index_prints_once(setup, tmp_path, capsys):
     index = str(empty / "index.db")
     assert capsys.readouterr() == (
         "",
-        "Index not found: {p!r}. Run rfc-ingest to build it.\n".format(p=index),
+        f"Index not found: {index!r}. Run rfc-ingest to build it.\n",
     )
 
 

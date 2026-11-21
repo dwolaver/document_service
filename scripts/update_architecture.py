@@ -81,16 +81,16 @@ def read_pinned_model(skill_path: str) -> str:
         with open(skill_path, encoding="utf-8") as skill_file:
             text = skill_file.read()
     except OSError as exc:
-        raise ArchitectureError("Can't read the skill at {p!r}: {e}".format(p=skill_path, e=exc)) from exc
+        raise ArchitectureError(f"Can't read the skill at {skill_path!r}: {exc}") from exc
     parts = text.split("---")
     match = _MODEL_FIELD.search(parts[1]) if text.startswith("---") and len(parts) > 2 else None
     if match is None:
-        raise ArchitectureError("The skill at {p!r} doesn't set a model.".format(p=skill_path))
+        raise ArchitectureError(f"The skill at {skill_path!r} doesn't set a model.")
     model = match.group(1)
     if not _FULL_MODEL_ID.fullmatch(model):
         raise ArchitectureError(
-            "The skill's model is {m!r}. A full model ID such as claude-opus-5-5 is required, "
-            "because an alias can change models without a decision.".format(m=model)
+            f"The skill's model is {model!r}. A full model ID such as claude-opus-5-5 is required, "
+            "because an alias can change models without a decision."
         )
     return model
 
@@ -122,7 +122,7 @@ def describe_usage(result: object) -> str:
     tokens = _output_tokens(result) if isinstance(result, dict) else {}
     if not tokens:
         return "no model usage reported"
-    return ", ".join("{m}: {t} output tokens".format(m=m, t=t) for m, t in sorted(tokens.items()))
+    return ", ".join(f"{m}: {t} output tokens" for m, t in sorted(tokens.items()))
 
 
 def check_run(exit_code: int, result: dict[str, Any] | None, pinned_model: str) -> str | None:
@@ -133,19 +133,17 @@ def check_run(exit_code: int, result: dict[str, Any] | None, pinned_model: str) 
     substitute. ``subtype`` isn't used, because it reported success for a failed run.
     """
     if result is None:
-        return "The run produced no JSON result (exit status {c}).".format(c=exit_code)
+        return f"The run produced no JSON result (exit status {exit_code})."
     if exit_code != 0 or result.get("is_error") is not False:
-        return "The run failed (exit status {c}): {r}".format(c=exit_code, r=result.get("result"))
+        report = result.get("result")
+        return f"The run failed (exit status {exit_code}): {report}"
     tokens = _output_tokens(result)
     pinned_tokens = tokens.get(pinned_model)
+    used = describe_usage(result)
     if pinned_tokens is None:
-        return "The pinned model {m} wasn't used. Models used: {u}.".format(
-            m=pinned_model, u=describe_usage(result)
-        )
+        return f"The pinned model {pinned_model} wasn't used. Models used: {used}."
     if any(model != pinned_model and count >= pinned_tokens for model, count in tokens.items()):
-        return "Another model did as much of the work as the pinned model {m}: {u}.".format(
-            m=pinned_model, u=describe_usage(result)
-        )
+        return f"Another model did as much of the work as the pinned model {pinned_model}: {used}."
     return None
 
 
@@ -188,7 +186,7 @@ def _run_claude(root: str, release: str, model: str) -> subprocess.CompletedProc
     command = [
         "claude",
         "-p",
-        "/update-architecture {r}".format(r=release),
+        f"/update-architecture {release}",
         "--model",
         model,
         "--output-format",
@@ -219,8 +217,8 @@ def update_architecture(root: str, release: str) -> str:
     before = _snapshot(root)
     if DOC_RELATIVE_PATH in before:
         raise ArchitectureError(
-            "{d} has uncommitted changes. Commit or discard them first, so a rejected run can't "
-            "overwrite them.".format(d=DOC_RELATIVE_PATH)
+            f"{DOC_RELATIVE_PATH} has uncommitted changes. Commit or discard them first, so a rejected run "
+            "can't overwrite them."
         )
 
     doc_path = os.path.join(root, DOC_RELATIVE_PATH)
@@ -235,14 +233,17 @@ def update_architecture(root: str, release: str) -> str:
     if reason is None:
         others = _other_changes(root, before)
         if others:
-            reason = "The run changed files other than {d}, which were left as they are: {o}".format(
-                d=DOC_RELATIVE_PATH, o=", ".join(others)
+            changed = ", ".join(others)
+            reason = (
+                f"The run changed files other than {DOC_RELATIVE_PATH}, which were left as they are: "
+                f"{changed}"
             )
     # check_run already rejects a missing result. Testing it here as well tells the type checker.
     if reason is not None or result is None:
         _restore(doc_path, original)
-        raise ArchitectureError("Rejected, and {d} was restored. {r}".format(d=DOC_RELATIVE_PATH, r=reason))
-    return "{report}\n\nModels used: {u}.".format(report=result.get("result", ""), u=describe_usage(result))
+        raise ArchitectureError(f"Rejected, and {DOC_RELATIVE_PATH} was restored. {reason}")
+    report = result.get("result", "")
+    return f"{report}\n\nModels used: {describe_usage(result)}."
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -259,7 +260,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         _log_error(str(exc))
         return 1
     print(report)
-    print("\nReview {d}, then commit it.".format(d=DOC_RELATIVE_PATH))
+    print(f"\nReview {DOC_RELATIVE_PATH}, then commit it.")
     return 0
 
 

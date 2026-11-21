@@ -67,7 +67,7 @@ def _load_json(path: paths.ConfigFile) -> Any:
         with paths.as_traversable(path).open(encoding="utf-8") as json_file:
             return json.load(json_file)
     except (OSError, ValueError) as exc:
-        raise ConfigError("Failed to read {p!r}: {e}".format(p=str(path), e=exc)) from exc
+        raise ConfigError(f"Failed to read {str(path)!r}: {exc}") from exc
 
 
 def _is_integer(value: object) -> TypeGuard[int]:
@@ -77,14 +77,14 @@ def _is_integer(value: object) -> TypeGuard[int]:
 
 def _parse_corpus_entry(entry: object) -> CorpusEntry:
     if not isinstance(entry, dict):
-        raise ConfigError("Corpus entry is not an object: {e!r}".format(e=entry))
+        raise ConfigError(f"Corpus entry is not an object: {entry!r}")
     number, family, title = entry.get("number"), entry.get("family"), entry.get("title")
     if not _is_integer(number) or number <= 0:
-        raise ConfigError("Corpus entry has an invalid RFC number: {e!r}".format(e=entry))
+        raise ConfigError(f"Corpus entry has an invalid RFC number: {entry!r}")
     if family not in FAMILIES:
-        raise ConfigError("Corpus entry has an unknown family: {e!r}".format(e=entry))
+        raise ConfigError(f"Corpus entry has an unknown family: {entry!r}")
     if not isinstance(title, str) or not title.strip():
-        raise ConfigError("Corpus entry has an invalid title: {e!r}".format(e=entry))
+        raise ConfigError(f"Corpus entry has an invalid title: {entry!r}")
     return CorpusEntry(number, family, title)
 
 
@@ -93,25 +93,25 @@ def load_corpus(path: paths.ConfigFile) -> list[CorpusEntry]:
     data = _load_json(path)
     rfcs = data.get("rfcs") if isinstance(data, dict) else None
     if not isinstance(rfcs, list) or not rfcs:
-        raise ConfigError("Corpus {p!r} must have a non-empty 'rfcs' list.".format(p=str(path)))
+        raise ConfigError(f"Corpus {str(path)!r} must have a non-empty 'rfcs' list.")
     entries = [_parse_corpus_entry(entry) for entry in rfcs]
     seen: set[int] = set()
     for entry in entries:
         if entry.number in seen:
-            raise ConfigError("Corpus lists RFC {n} more than once.".format(n=entry.number))
+            raise ConfigError(f"Corpus lists RFC {entry.number} more than once.")
         seen.add(entry.number)
     return entries
 
 
 def _positive_number(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
-        raise ConfigError("Config {n} must be a positive number, got {v!r}.".format(n=name, v=value))
+        raise ConfigError(f"Config {name} must be a positive number, got {value!r}.")
     return value
 
 
 def _positive_integer(value: object, name: str) -> int:
     if not _is_integer(value) or value <= 0:
-        raise ConfigError("Config {n} must be a positive integer, got {v!r}.".format(n=name, v=value))
+        raise ConfigError(f"Config {name} must be a positive integer, got {value!r}.")
     return value
 
 
@@ -119,21 +119,19 @@ def load_config(path: paths.ConfigFile) -> IngestConfig:
     """Return the validated configuration, raising :class:`~rfc_qa.errors.ConfigError` if it's invalid."""
     data = _load_json(path)
     if not isinstance(data, dict):
-        raise ConfigError("Config {p!r} must be a JSON object.".format(p=str(path)))
+        raise ConfigError(f"Config {str(path)!r} must be a JSON object.")
     model = data.get("embedding_model")
     if not isinstance(model, dict):
-        raise ConfigError("Config embedding_model must be an object, got {v!r}.".format(v=model))
+        raise ConfigError(f"Config embedding_model must be an object, got {model!r}.")
     name = model.get("name")
     if not isinstance(name, str) or not name.strip():
-        raise ConfigError("Config embedding_model.name must be a name, got {v!r}.".format(v=name))
+        raise ConfigError(f"Config embedding_model.name must be a name, got {name!r}.")
     max_tokens = _positive_integer(model.get("max_tokens"), "embedding_model.max_tokens")
     chars_per_token = _positive_number(data.get("chars_per_token"), "chars_per_token")
     target = _positive_integer(data.get("target_chunk_tokens"), "target_chunk_tokens")
     if target > max_tokens:
         raise ConfigError(
-            "Config target_chunk_tokens ({t}) exceeds embedding_model.max_tokens ({m}).".format(
-                t=target, m=max_tokens
-            )
+            f"Config target_chunk_tokens ({target}) exceeds embedding_model.max_tokens ({max_tokens})."
         )
     config = IngestConfig(name, max_tokens, chars_per_token, target)
     if config.max_chunk_chars < 1:
@@ -142,7 +140,7 @@ def load_config(path: paths.ConfigFile) -> IngestConfig:
 
 
 def _rfc_path(rfc_dir: str, number: int) -> str:
-    return os.path.join(rfc_dir, "rfc{n}.txt".format(n=number))
+    return os.path.join(rfc_dir, f"rfc{number}.txt")
 
 
 def _ensure_downloaded(entries: Sequence[CorpusEntry], rfc_dir: str) -> None:
@@ -158,11 +156,11 @@ def _chunk_rfc(entry: CorpusEntry, rfc_dir: str, max_chunk_chars: int) -> list[C
         with open(path, encoding="utf-8", errors="replace") as rfc_file:
             text = rfc_file.read()
     except OSError as exc:
-        raise IngestError("RFC {n}: failed to read {p!r}: {e}".format(n=entry.number, p=path, e=exc)) from exc
+        raise IngestError(f"RFC {entry.number}: failed to read {path!r}: {exc}") from exc
     sections = parse_rfc(text)
     chunks = chunk_sections(sections, entry.number, entry.title, entry.family, max_chunk_chars)
     if not chunks:
-        raise IngestError("RFC {n}: produced no chunks.".format(n=entry.number))
+        raise IngestError(f"RFC {entry.number}: produced no chunks.")
     return chunks
 
 
@@ -205,12 +203,12 @@ def _input_paths(args: argparse.Namespace) -> tuple[paths.ConfigFile, paths.Conf
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Console entry point: build the index, print a summary and return an exit code."""
+    default_data_dir = paths.default_data_dir()
     parser = argparse.ArgumentParser(description="Build the RFC search index.")
     parser.add_argument(
         "--config-dir",
-        help="Directory holding {c} and {i}. Defaults to ${e}, then the packaged defaults.".format(
-            c=paths.CORPUS_FILE, i=paths.INGEST_CONFIG_FILE, e=paths.CONFIG_DIR_ENV
-        ),
+        help=f"Directory holding {paths.CORPUS_FILE} and {paths.INGEST_CONFIG_FILE}. "
+        f"Defaults to ${paths.CONFIG_DIR_ENV}, then the packaged defaults.",
     )
     parser.add_argument(
         "--corpus",
@@ -222,8 +220,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument(
         "--data-dir",
-        help="Directory for the downloaded RFCs and the index. Defaults to ${e}, then the user data "
-        "directory ({d}).".format(e=paths.DATA_DIR_ENV, d=paths.default_data_dir()),
+        help=f"Directory for the downloaded RFCs and the index. Defaults to ${paths.DATA_DIR_ENV}, then the "
+        f"user data directory ({default_data_dir}).",
     )
     args = parser.parse_args(argv)
 
@@ -235,9 +233,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return report_error(exc)
 
     print(
-        "Indexed {r} RFCs into {c} chunks. Largest chunk: {l} characters.".format(
-            r=summary.rfc_count, c=summary.chunk_count, l=summary.largest_chunk_chars
-        )
+        f"Indexed {summary.rfc_count} RFCs into {summary.chunk_count} chunks. "
+        f"Largest chunk: {summary.largest_chunk_chars} characters."
     )
     return 0
 
