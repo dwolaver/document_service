@@ -1,4 +1,4 @@
-"""Top-level query interface for the Document Q&A Service.
+"""Top-level query interface for rfc-qa.
 
 This is the service's main entry point. ``query`` is the programmatic API, and ``main`` is a thin
 console wrapper. A query retrieves RFC passages from the keyword index, asks the local model to

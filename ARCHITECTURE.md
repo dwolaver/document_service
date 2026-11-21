@@ -4,7 +4,7 @@
 
 ## Overview
 
-The Document Q&A Service answers natural-language questions about a curated set of IETF RFCs, and
+rfc-qa answers natural-language questions about a curated set of IETF RFCs, and
 cites the RFC sections each answer came from. It is a retrieval-augmented generation (RAG) pipeline
 written by hand in plain Python modules at the repository root, with `requests` as its only runtime
 dependency.

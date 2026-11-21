@@ -33,6 +33,8 @@ All notable changes to this project are recorded here. The format follows
 
 ### Changed
 
+- The project is named `rfc-qa` in its documents, matching the package and the commands, in place of
+  "Document Q&A Service".
 - The code is in the `rfc_qa` package, with subpackages for ingestion, retrieval and generation, in
   the `src/` layout. The package is only imported as installed.
 - The configuration files are TOML: `corpus.toml`, `ingest.toml` and `query.toml`.

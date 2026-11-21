@@ -1,5 +1,6 @@
-# document_service
-Document Q&amp;A Service
+# rfc-qa
+
+RFC Q&A: cited answers from the IETF RFCs.
 
 A retrieval-augmented generation (RAG) service that answers questions about IETF RFCs and
 cites the sections its answers come from.

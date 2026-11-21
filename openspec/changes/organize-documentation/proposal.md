@@ -40,6 +40,13 @@ features.
   - It lists the TOML configuration files, which replaced the JSON ones in #25.
   - `ARCHITECTURE.md` gets the back-link now as a one-line edit, so the link test passes before the
     next release regenerates the file.
+- **The project's name is `rfc-qa`.** "Document service" was a placeholder from the start of the
+  project, and the package, the commands and the data directory already say `rfc-qa`. The README's
+  title becomes `rfc-qa`, with the tagline "RFC Q&A: cited answers from the IETF RFCs." The
+  overview sentence in `ARCHITECTURE.md`, the rfc-downloader spec's Purpose and the `query.py`
+  docstring use the name too. The links to the GitHub repository keep `document_service` until the
+  owner renames the repository after this change merges, because GitHub redirects the old name to
+  the new one but not the other way round. They're updated in a follow-up.
 - **Not in this change:** a release skill. The procedure is written down first, as a checklist in
   `docs/releasing.md`, and followed by hand at the next release. Whether to automate it is decided
   after that.
@@ -60,10 +67,11 @@ features.
 ## Impact
 
 - Documents: `README.md` is rewritten. `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md` and six files
-  in `docs/` are new. `ARCHITECTURE.md` gains one line.
+  in `docs/` are new. `ARCHITECTURE.md` gains one line and names the project `rfc-qa`.
 - Workflow: `openspec/config.yaml` gains a tasks rule for the changelog entry.
   `.claude/skills/update-architecture/SKILL.md` changes where it reads the roadmap, adds the
   back-link to its structure, and names the TOML files.
 - Tests: a new `tests/test_docs.py`.
+- Code: only the `query.py` module docstring.
 - No change to the package, the commands, their output or the configuration. `pyproject.toml` still
   names `README.md` as the readme.

@@ -183,6 +183,29 @@ added.
 Alternative: leave ARCHITECTURE.md alone and exempt it from the back-link check. That's more honest
 about the file being generated, but the exemption would outlive the reason for it.
 
+### The project's name
+
+The repository was named `document_service` at the start, before the project had a focus. The
+package (`rfc_qa`), the distribution (`rfc-qa`), the commands (`rfc-*`) and the data directory
+(`rfc-qa`) already share one name, so the documents adopt it rather than introduce a third.
+
+- The README's title is `rfc-qa`, and its tagline is "RFC Q&A: cited answers from the IETF RFCs."
+  The tagline doesn't mention obsolete RFCs, because status-aware retrieval is roadmap step 3 and
+  isn't built yet.
+- `ARCHITECTURE.md`'s first sentence names `rfc-qa`, as a one-line edit like the back-link. The skill
+  takes the name from the code, so regeneration keeps it.
+- The rfc-downloader spec's Purpose is edited in the main spec directly, because a delta can't
+  change a Purpose. The requirements don't change.
+- The archived changes keep the old name, because they're the record of what was decided at the
+  time.
+- The GitHub links keep `document_service`. GitHub redirects a renamed repository's old URLs to the
+  new name, so they keep working after the rename. A link to the new name would break until then. A
+  follow-up after the rename updates them.
+
+Alternatives: a distinct name such as `rfcite`. It has more character, but the commands and the
+import would still say `rfc`/`rfc_qa`, unless the package was renamed too, which is a code change of
+its own.
+
 ## Risks / Trade-offs
 
 - **Content lost in the move** → the table above maps every README section. The apply task checks

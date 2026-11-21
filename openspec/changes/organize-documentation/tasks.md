@@ -21,9 +21,13 @@
 - [x] 4.1 Add `tests/test_docs.py` as in the design, parametrized by document: links and anchors resolve, a back-link appears before the first `##` heading, the README links to every other document, and `CHANGELOG.md`'s first section is `[Unreleased]`. Verify that it passes. Then verify the anchor rule against GitHub: render `README.md`, `docs/configuration.md` and `docs/usage.md` with `gh api markdown -f mode=gfm`, and check that the `id` of every heading equals the anchor the test computes for it
 - [x] 4.2 One at a time, plant a link to a missing file, a link to a missing anchor, a guide without its back-link, a new `docs/` file the README doesn't list, and a `CHANGELOG.md` whose first section isn't `[Unreleased]`. Verify that each makes the test fail and names the document and, for a link, the link. Then remove each one, and verify that `git status` shows none of them left
 
-## 5. Checks
+## 5. Project name
 
-- [x] 5.1 Run `pytest`, with and without `RFC_QA_INSTALL_TESTS=1`, and `pre-commit run --all-files`, and verify that all pass. The install tests copy `README.md` into the build, so they show that the package still builds with the new README
+- [x] 5.1 Title the README `rfc-qa`, with the tagline "RFC Q&A: cited answers from the IETF RFCs." in place of "Document Q&amp;A Service". Name the project `rfc-qa` in `ARCHITECTURE.md`'s first sentence, the Purpose of `openspec/specs/rfc-downloader/spec.md` and the `src/rfc_qa/query.py` docstring, and add an entry to `CHANGELOG.md`. Leave the archived changes and the GitHub links as they are. Verify that `git grep -n -i "document q\|document service\|document_service" -- . ':!openspec/changes/archive'` finds only the GitHub links and this change's own artifacts, and that `openspec validate --specs` passes
+
+## 6. Checks
+
+- [x] 6.1 Run `pytest`, with and without `RFC_QA_INSTALL_TESTS=1`, and `pre-commit run --all-files`, and verify that all pass. The install tests copy `README.md` into the build, so they show that the package still builds with the new README
 
 ## Workflow follow-up
 
