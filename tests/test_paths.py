@@ -1,6 +1,8 @@
 import logging
 import os
+import re
 import sys
+import tomllib
 from pathlib import Path
 
 import platformdirs
@@ -11,11 +13,13 @@ from rfc_qa import paths
 from rfc_qa.errors import ConfigError
 from rfc_qa.paths import (
     CONFIG_DIR_ENV,
+    CORPUS_FILE,
     DATA_DIR_ENV,
     PACKAGED_CONFIG_SOURCE,
     ConfigDir,
     SelectedDir,
     packaged_config_dir,
+    read_toml,
     resolve_config_dir,
     resolve_data_dir,
 )
@@ -41,7 +45,7 @@ def test_default_is_the_packaged_configuration():
     config_dir = resolve_config_dir()
     assert config_dir == ConfigDir(packaged_config_dir(), PACKAGED_CONFIG_SOURCE)
     assert config_dir.is_packaged
-    assert str(config_dir.file(paths.QUERY_CONFIG_FILE)) == str(packaged_config_dir() / "query.json")
+    assert str(config_dir.file(paths.QUERY_CONFIG_FILE)) == str(packaged_config_dir() / "query.toml")
 
 
 def test_environment_over_default(dirs, monkeypatch):
@@ -190,3 +194,39 @@ def test_missing_config_directory_is_raised_not_logged(tmp_path, caplog):
     with pytest.raises(ConfigError):
         resolve_config_dir(str(tmp_path / "missing"))
     assert _path_records(caplog) == []
+
+
+# --- Reading TOML ---
+
+
+def test_read_toml_from_a_path(tmp_path):
+    path = tmp_path / "query.toml"
+    path.write_text("[retrieval]\nlimit = 5\n", encoding="utf-8")
+    assert read_toml(str(path)) == {"retrieval": {"limit": 5}}
+
+
+def test_read_toml_from_the_package():
+    assert "rfcs" in read_toml(packaged_config_dir() / CORPUS_FILE)
+
+
+def test_missing_toml_file_is_a_config_error(tmp_path):
+    path = str(tmp_path / "missing.toml")
+    with pytest.raises(ConfigError, match=f"^Failed to read {re.escape(repr(path))}: ") as excinfo:
+        read_toml(path)
+    assert isinstance(excinfo.value.__cause__, OSError)
+
+
+def test_malformed_toml_names_the_file_line_and_column(tmp_path):
+    path = tmp_path / "query.toml"
+    path.write_text("[retrieval]\nlimit = \n", encoding="utf-8")
+    with pytest.raises(ConfigError) as excinfo:
+        read_toml(str(path))
+    assert str(excinfo.value) == f"Failed to read {str(path)!r}: Invalid value (at line 2, column 9)"
+    assert isinstance(excinfo.value.__cause__, tomllib.TOMLDecodeError)
+
+
+def test_json_is_rejected_as_malformed_toml(tmp_path):
+    path = tmp_path / "corpus.toml"
+    path.write_text('{"rfcs": [{"number": 793}]}\n', encoding="utf-8")
+    with pytest.raises(ConfigError, match=r"\(at line 1, column 1\)$"):
+        read_toml(str(path))

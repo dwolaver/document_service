@@ -27,7 +27,7 @@ pytestmark = [
     pytest.mark.skipif(sys.platform == "win32", reason="runs the commands from the venv's bin/"),
 ]
 
-CONFIG_FILES = ("corpus.json", "ingest.json", "query.json")
+CONFIG_FILES = ("corpus.toml", "ingest.toml", "query.toml")
 FIXTURE_RFC = os.path.join(REPO_ROOT, "tests", "ingestion", "fixtures", "paginated.txt")
 # Nothing listens here, so a model running on the developer's machine doesn't answer.
 UNREACHABLE_OLLAMA = "http://127.0.0.1:9"
@@ -108,6 +108,7 @@ def test_wheel_holds_the_package_and_its_configuration(install):
     assert all(name.startswith(("rfc_qa/", "rfc_qa-")) for name in names), names
     for name in CONFIG_FILES:
         assert "rfc_qa/config/" + name in names
+    assert [name for name in names if name.endswith(".json")] == []
 
 
 def test_package_is_imported_from_the_environment(install):
@@ -125,9 +126,9 @@ def test_default_data_directory_is_the_user_data_directory(install):
 def _seed_corpus(install: Install) -> int:
     """Save the fixture RFC under every number in the packaged corpus, so nothing is downloaded."""
     script = (
-        "import json; from importlib.resources import files; "
-        "print(json.dumps([e['number'] for e in json.loads("
-        "(files('rfc_qa') / 'config' / 'corpus.json').read_text(encoding='utf-8'))['rfcs']]))"
+        "import json, tomllib; from importlib.resources import files; "
+        "print(json.dumps([e['number'] for e in tomllib.loads("
+        "(files('rfc_qa') / 'config' / 'corpus.toml').read_text(encoding='utf-8'))['rfcs']]))"
     )
     result = install.run("python", "-c", script)
     assert result.returncode == 0, result.stderr

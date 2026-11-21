@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import re
@@ -61,3 +62,34 @@ def split_stderr(err):
         else:
             other.append(line)
     return levels, other
+
+
+def _toml_value(value):
+    """Write ``value`` as an inline TOML value: a string, boolean, number, list or inline table."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, str):
+        # A JSON string is a valid TOML basic string for the values these tests use.
+        return json.dumps(value)
+    if isinstance(value, list):
+        return "[" + ", ".join(_toml_value(item) for item in value) + "]"
+    if isinstance(value, dict):
+        return (
+            "{ "
+            + ", ".join(f"{key} = {_toml_value(item)}" for key, item in value.items() if item is not None)
+            + " }"
+        )
+    raise TypeError(f"Can't write {value!r} as TOML")
+
+
+def write_toml(path, data):
+    """Write ``data`` to ``path`` as TOML and return the path as a string.
+
+    Each top-level key becomes ``key = <inline value>``, so a nested dict is an inline table. TOML has
+    no null, so a ``None`` value is left out, which the loaders report the same way as a missing key.
+    """
+    lines = [f"{key} = {_toml_value(value)}" for key, value in data.items() if value is not None]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return str(path)

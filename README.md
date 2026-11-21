@@ -222,8 +222,10 @@ as described below. `--index` names a single index file instead, and takes prece
 directory.
 
 The default configuration ships inside the package, in [`src/rfc_qa/config/`](src/rfc_qa/config).
-[`corpus.json`](src/rfc_qa/config/corpus.json) lists the RFCs, with their family and title.
-[`ingest.json`](src/rfc_qa/config/ingest.json) sets the chunk size limit:
+The files are [TOML](https://toml.io), and a comment in each one describes every section and
+setting, with its unit or allowed values and any other setting it has to agree with.
+[`corpus.toml`](src/rfc_qa/config/corpus.toml) lists the RFCs, with their family and title.
+[`ingest.toml`](src/rfc_qa/config/ingest.toml) sets the chunk size limit:
 
 - `embedding_model` is the embedding model and its token limit, which is the hard ceiling.
 - `target_chunk_tokens` is the chunk size to aim for inside that ceiling.
@@ -252,7 +254,7 @@ rfc-ingest --config-dir my-config
 
 ```
 RFC_QA_CONFIG_DIR=/srv/rfc-qa/config rfc-ingest
-rfc-ingest --config-dir staging --corpus small-corpus.json
+rfc-ingest --config-dir staging --corpus small-corpus.toml
 ```
 
 Generated data goes in one data directory: the downloaded RFCs in its `rfcs/` folder and the index in
@@ -304,13 +306,13 @@ on the first question after it has been idle, which takes a few seconds, and the
 that happened. From Python, `rfc_qa.query.query()` returns the same result, with timings and a
 `cold_start` flag, so that slow first answers can be left out of performance figures.
 
-[`query.json`](src/rfc_qa/config/query.json) sets the model, the Ollama address, the context window,
+[`query.toml`](src/rfc_qa/config/query.toml) sets the model, the Ollama address, the context window,
 the answer length limit, the request timeout and how many passages to retrieve. A query fails before
 calling the model if those passages and the answer wouldn't fit in the context window. The index
 location isn't a setting: it's always `index.db` in the data directory.
 
 When the `OLLAMA_BASE_URL` environment variable is set and not empty, it replaces the Ollama address
-from `query.json`, for example to reach Ollama in another container. The file must still give an
+from `query.toml`, for example to reach Ollama in another container. The file must still give an
 address of its own. If Ollama can't be reached, the error names the address that was tried, which
 shows when a leftover variable is redirecting queries.
 
@@ -375,7 +377,7 @@ printed.
 
 ```
 $ rfc-ingest -v --data-dir /srv/rfc-qa
-INFO rfc_qa.ingestion.ingest: 59 RFCs in the manifest '.../rfc_qa/config/corpus.json'
+INFO rfc_qa.ingestion.ingest: 59 RFCs in the manifest '.../rfc_qa/config/corpus.toml'
 INFO rfc_qa.ingestion.rfc_downloader: Downloading RFC 9110 from https://www.rfc-editor.org/rfc/rfc9110.txt
 INFO rfc_qa.ingestion.ingest: Chunked 59 RFCs into 5261 chunks
 INFO rfc_qa.retrieval.keyword_index: Writing 5261 chunks to the index at '/srv/rfc-qa/index.db'
