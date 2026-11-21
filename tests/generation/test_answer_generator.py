@@ -1,5 +1,7 @@
 import json
 import logging
+import pathlib
+from typing import ClassVar
 
 import pytest
 import requests
@@ -55,7 +57,7 @@ def model(monkeypatch):
     """Replace the network call, recording each request and returning ``model.response``."""
 
     class Model:
-        requests = []
+        requests: ClassVar[list[dict[str, object]]] = []
         response = FakeResponse(200, _ollama({"found": True, "answer": "Gone.", "citations": ["P1"]}))
 
     def fake_post(url, body, timeout):
@@ -79,7 +81,8 @@ def _answer_with(model, output, **extra):
 
 def test_messages_label_passages_in_order_then_ask_the_question():
     system, user = build_messages("What does 404 mean?", CHUNKS)
-    assert system["role"] == "system" and "only the passages" in system["content"]
+    assert system["role"] == "system"
+    assert "only the passages" in system["content"]
     content = user["content"]
     positions = [content.index(label) for label in ("Passage P1", "Passage P2", "Passage P3")]
     assert positions == sorted(positions)
@@ -144,7 +147,7 @@ def test_only_the_chat_endpoint_is_called(model):
 
 
 def test_module_has_no_way_to_pull_or_start_ollama():
-    source = open(answer_generator.__file__, encoding="utf-8").read()
+    source = pathlib.Path(answer_generator.__file__).read_text(encoding="utf-8")
     assert "/api/pull" not in source
     assert "subprocess" not in source
 

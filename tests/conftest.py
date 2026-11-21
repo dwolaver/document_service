@@ -25,7 +25,7 @@ def _clear_service_environment(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _isolated_default_data_dir(tmp_path_factory, monkeypatch):
+def isolated_default_data_dir(tmp_path_factory, monkeypatch):
     """Point the default data directory at a temporary one, so no test reads or writes the real one."""
     directory = str(tmp_path_factory.mktemp("default-data") / "rfc-qa")
     monkeypatch.setattr(paths, "default_data_dir", lambda: directory)

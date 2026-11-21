@@ -174,11 +174,11 @@ def _snapshot(root: str) -> dict[str, str | None]:
 
 def _other_changes(root: str, before: dict[str, str | None]) -> list[str]:
     """Return files other than ARCHITECTURE.md that changed since ``before`` was taken."""
-    changed: list[str] = []
-    for path in sorted(_changed_paths(root) | set(before)):
-        if path != DOC_RELATIVE_PATH and before.get(path, "absent") != _file_hash(root, path):
-            changed.append(path)
-    return changed
+    return [
+        path
+        for path in sorted(_changed_paths(root) | set(before))
+        if path != DOC_RELATIVE_PATH and before.get(path, "absent") != _file_hash(root, path)
+    ]
 
 
 def _run_claude(root: str, release: str, model: str) -> subprocess.CompletedProcess[str]:

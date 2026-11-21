@@ -1,5 +1,6 @@
 import logging
 import os
+import pathlib
 import sqlite3
 
 import pytest
@@ -69,13 +70,13 @@ def test_build_replaces_an_existing_index(index_path):
 
 def test_failed_build_leaves_existing_index_and_no_temporary_file(index_path, tmp_path, capsys):
     capsys.readouterr()
-    before = open(index_path, "rb").read()
+    before = pathlib.Path(index_path).read_bytes()
     duplicate = [CHUNKS[0], CHUNKS[0]]
     with pytest.raises(IndexBuildError, match="Failed to build index") as excinfo:
         build_index(duplicate, METADATA, index_path)
     assert index_path in str(excinfo.value)
     assert isinstance(excinfo.value.__cause__, sqlite3.Error)
-    assert open(index_path, "rb").read() == before
+    assert pathlib.Path(index_path).read_bytes() == before
     assert os.listdir(tmp_path) == ["index.db"]
     assert capsys.readouterr() == ("", "")
 
@@ -179,7 +180,7 @@ def test_missing_index_raises_and_is_not_created(tmp_path, capsys, read):
 
 
 @pytest.mark.parametrize(
-    "read, action",
+    ("read", "action"),
     [(lambda path: search(path, "handshake"), "search"), (read_metadata, "read")],
 )
 def test_unreadable_index_raises_with_the_database_error(tmp_path, capsys, read, action):
@@ -292,7 +293,9 @@ def test_build_is_logged(tmp_path, caplog):
     assert len(search(path, "handshake", 10)) == 2
 
 
-@pytest.mark.parametrize("text, limit, count", [("handshake", 10, 2), ("zzzzqqqq", 5, 0), ("!!!", 5, 0)])
+@pytest.mark.parametrize(
+    ("text", "limit", "count"), [("handshake", 10, 2), ("zzzzqqqq", 5, 0), ("!!!", 5, 0)]
+)
 def test_search_is_logged(index_path, caplog, text, limit, count):
     caplog.set_level(logging.DEBUG, logger="rfc_qa")
     search(index_path, text, limit)
@@ -331,7 +334,8 @@ def test_cli_vv_shows_the_search(index_path, capsys):
     assert main(["handshake", "--index", index_path, "-vv"]) == 0
     captured = capsys.readouterr()
     levels, other = split_stderr(captured.err)
-    assert other == [] and set(levels) == {"DEBUG"}
+    assert other == []
+    assert set(levels) == {"DEBUG"}
     assert f"Searched {index_path!r} for 'handshake' (limit 5): 2 results" in captured.err
 
 
@@ -342,6 +346,7 @@ def test_cli_vv_failure_ends_with_the_error_once(tmp_path, capsys):
     captured = capsys.readouterr()
     message = f"Index not found: {str(empty / 'index.db')!r}. Run rfc-ingest to build it."
     levels, other = split_stderr(captured.err)
-    assert levels == ["DEBUG"] and other == [message]
+    assert levels == ["DEBUG"]
+    assert other == [message]
     assert captured.err.endswith(message + "\n")
     assert captured.out == ""

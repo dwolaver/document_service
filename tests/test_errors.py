@@ -23,22 +23,25 @@ def test_each_error_is_an_rfc_qa_error(error_class):
     assert issubclass(error_class, errors.RfcQaError)
 
 
-@pytest.mark.parametrize("error_class", (errors.RfcQaError, *SUBCLASSES))
+@pytest.mark.parametrize("error_class", [errors.RfcQaError, *SUBCLASSES])
 def test_no_error_is_a_caller_bug_exception(error_class):
     assert not issubclass(error_class, (TypeError, ValueError))
 
 
-@pytest.mark.parametrize("error_class", (errors.RfcQaError, *SUBCLASSES))
+@pytest.mark.parametrize("error_class", [errors.RfcQaError, *SUBCLASSES])
 def test_str_is_the_message(error_class):
     assert str(error_class("Index not found: '/x/index.db'.")) == "Index not found: '/x/index.db'."
 
 
 def test_one_kind_is_not_caught_by_another():
-    with pytest.raises(errors.ConfigError):
+    def raise_inside_an_index_handler():
         try:
             raise errors.ConfigError("bad config")
         except errors.IndexUnavailableError:
             pytest.fail("a configuration error was caught as an index error")
+
+    with pytest.raises(errors.ConfigError):
+        raise_inside_an_index_handler()
 
 
 def test_report_error_prints_one_line_to_stderr_and_returns_1(capsys):

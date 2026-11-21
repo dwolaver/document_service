@@ -35,8 +35,12 @@ include = ["*.py"]
 # pyflakes and pycodestyle errors, plus import sorting and bugbear. Listed explicitly, because ruff's
 # own default set is broader and changes between releases. pyupgrade (UP) reports syntax that the
 # minimum Python version makes outdated, such as str.format() where an f-string would do. LOG and G
-# check logging calls, such as a message formatted before it's passed to the logger.
-select = ["E4", "E7", "E9", "F", "I", "B", "UP", "LOG", "G"]
+# check logging calls, such as a message formatted before it's passed to the logger. E501 enforces the
+# line length on strings and comments, which the formatter can't wrap. SIM reports code a simpler
+# construct can replace, such as a file opened without a context manager. RUF is ruff's own checks,
+# such as an unescaped pytest.raises pattern. PERF reports a loop that builds a list a comprehension
+# would. PT checks pytest's conventions, such as one condition per assert.
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "LOG", "G", "E501", "SIM", "RUF", "PERF", "PT"]
 
 [tool.mypy]
 # The package is in src/. mypy doesn't follow the editable install, so it looks there directly.

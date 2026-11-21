@@ -178,7 +178,7 @@ def test_missing_config_value_is_rejected(tmp_path, key):
 def test_real_config_loads():
     config = load_config(paths.packaged_config_dir() / "ingest.toml")
     assert config.embedding_model_name == "nomic-embed-text"
-    assert 0 < config.max_chunk_chars
+    assert config.max_chunk_chars > 0
 
 
 # --- Pipeline (task 5.1) ---
@@ -320,7 +320,7 @@ def test_unreadable_rfc_names_the_rfc(workspace, monkeypatch, capsys):
         return real_open(path, *args, **kwargs)
 
     monkeypatch.setattr("builtins.open", fake_open)
-    with pytest.raises(IngestError, match="^RFC 9110: failed to read ") as excinfo:
+    with pytest.raises(IngestError, match=r"^RFC 9110: failed to read ") as excinfo:
         _run(workspace)
     assert excinfo.value.__cause__ is error
     assert not os.path.exists(workspace["index"])
@@ -359,11 +359,11 @@ def test_rfc_with_no_chunks_names_the_rfc(workspace, capsys):
 
 def test_failed_run_keeps_the_earlier_index(workspace, monkeypatch):
     _run(workspace)
-    before = open(workspace["index"], "rb").read()
+    before = pathlib.Path(workspace["index"]).read_bytes()
     os.remove(os.path.join(workspace["data_dir"], "rfcs", "rfc793.txt"))
     monkeypatch.setattr(ingest, "download_rfc", _failing_download)
     assert main(_main_args(workspace)) == 1
-    assert open(workspace["index"], "rb").read() == before
+    assert pathlib.Path(workspace["index"]).read_bytes() == before
     assert sorted(os.listdir(workspace["data_dir"])) == ["index.db", "rfcs"]
 
 
@@ -452,7 +452,7 @@ def test_corpus_flag_with_a_config_directory(ingestion_inputs, tmp_path):
     assert ingestion_inputs == [(corpus, os.path.join(directory, "ingest.toml"))]
 
 
-@pytest.mark.parametrize("use_env, source", [(False, "--config-dir"), (True, "RFC_QA_CONFIG_DIR")])
+@pytest.mark.parametrize(("use_env", "source"), [(False, "--config-dir"), (True, "RFC_QA_CONFIG_DIR")])
 def test_missing_config_directory_fails_before_downloading(workspace, monkeypatch, capsys, use_env, source):
     missing = os.path.join(workspace["data_dir"], "missing")
     args = ["--data-dir", workspace["data_dir"]]
@@ -565,7 +565,8 @@ def test_ingest_v_shows_progress_on_stderr_only(workspace, capsys):
     levels, other = split_stderr(captured.err)
     assert other == []
     assert set(levels) == {"INFO"}
-    assert "Writing" in captured.err and workspace["index"] in captured.err
+    assert "Writing" in captured.err
+    assert workspace["index"] in captured.err
 
 
 def test_ingest_vv_adds_detail(workspace, capsys):
@@ -580,7 +581,8 @@ def test_ingest_v_failure_ends_with_the_error_once(workspace, monkeypatch, capsy
     assert main([*_main_args(workspace), "-v"]) == 1
     captured = capsys.readouterr()
     levels, other = split_stderr(captured.err)
-    assert levels and other == ["RFC 793: unexpected HTTP status 503."]
+    assert levels
+    assert other == ["RFC 793: unexpected HTTP status 503."]
     assert captured.err.endswith("RFC 793: unexpected HTTP status 503.\n")
     assert captured.err.count("unexpected HTTP status 503") == 1
     assert captured.out == ""

@@ -155,7 +155,7 @@ def load_query_config(path: paths.ConfigFile) -> QueryConfig:
 
 
 def _elapsed_ms(start: float) -> int:
-    return int(round((time.perf_counter() - start) * 1000))
+    return round((time.perf_counter() - start) * 1000)
 
 
 class _Clock:

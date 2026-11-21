@@ -24,7 +24,8 @@ SYSTEM_PROMPT = """You answer questions about IETF RFCs using only the passages 
 Rules:
 - Use only facts stated in the passages. Do not use outside knowledge.
 - If the passages do not answer the question, set found to false, and leave answer and citations empty.
-- Otherwise set found to true, answer briefly, and list the label of every passage you used in citations, such as "P1"."""
+- Otherwise set found to true, answer briefly, and list the label of every passage you used in \
+citations, such as "P1"."""
 
 _ANSWER_SCHEMA = {
     "type": "object",
@@ -177,7 +178,7 @@ def _int_or_none(value: object) -> int | None:
 
 
 def _to_ms(nanoseconds: int | None) -> int | None:
-    return None if nanoseconds is None else int(round(nanoseconds / _NANOSECONDS_PER_MS))
+    return None if nanoseconds is None else round(nanoseconds / _NANOSECONDS_PER_MS)
 
 
 def generate_answer(question: str, chunks: Sequence[Chunk], settings: ModelSettings) -> GenerationResult:
