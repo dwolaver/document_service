@@ -78,4 +78,4 @@ These decisions were mine, and they shaped the result:
 
 The record is public. The proposals and designs in [openspec/changes/archive/](../openspec/changes/archive/)
 show each decision with its reasons and the alternatives that were rejected, and the
-[pull requests](https://github.com/dwolaver/document_service/pulls?q=is%3Apr) show the reviews.
+[pull requests](https://github.com/dwolaver/rfc-qa/pulls?q=is%3Apr) show the reviews.
