@@ -3,8 +3,7 @@
 ## Purpose
 
 Fetches an IETF RFC by number from the canonical source, verifies its integrity and
-identity, and stores it on disk atomically and idempotently for later ingestion by the
-Document Q&A Service.
+identity, and stores it on disk atomically and idempotently for later ingestion by rfc-qa.
 
 ## Requirements
 
