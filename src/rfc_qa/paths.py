@@ -98,9 +98,7 @@ def resolve_config_dir(explicit: str | None = None, explicit_source: str = "--co
         return ConfigDir(packaged_config_dir(), PACKAGED_CONFIG_SOURCE)
     if not os.path.isdir(selected.path):
         raise ConfigError(
-            "Configuration directory {p!r} (from {s}) doesn't exist.".format(
-                p=selected.path, s=selected.source
-            )
+            f"Configuration directory {selected.path!r} (from {selected.source}) doesn't exist."
         )
     return ConfigDir(Path(selected.path), selected.source)
 

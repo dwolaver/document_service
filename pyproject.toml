@@ -33,8 +33,9 @@ include = ["*.py"]
 
 [tool.ruff.lint]
 # pyflakes and pycodestyle errors, plus import sorting and bugbear. Listed explicitly, because ruff's
-# own default set is broader and changes between releases.
-select = ["E4", "E7", "E9", "F", "I", "B"]
+# own default set is broader and changes between releases. pyupgrade (UP) reports syntax that the
+# minimum Python version makes outdated, such as str.format() where an f-string would do.
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
 
 [tool.mypy]
 # The package is in src/. mypy doesn't follow the editable install, so it looks there directly.

@@ -59,24 +59,19 @@ class GenerationResult:
 
 
 def _label(position: int) -> str:
-    return "P{n}".format(n=position + 1)
+    return f"P{position + 1}"
 
 
 def build_messages(question: str, chunks: Sequence[Chunk]) -> list[dict[str, str]]:
     """Return the chat messages for ``question``, with ``chunks`` labeled in retrieval order."""
     passages = "\n\n".join(
-        "Passage {label} (RFC {rfc} section {section}: {title})\n{text}".format(
-            label=_label(position),
-            rfc=chunk.rfc_number,
-            section=chunk.section_number,
-            title=chunk.section_title,
-            text=chunk.text,
-        )
+        f"Passage {_label(position)} (RFC {chunk.rfc_number} section {chunk.section_number}: "
+        f"{chunk.section_title})\n{chunk.text}"
         for position, chunk in enumerate(chunks)
     )
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": "Passages:\n\n{p}\n\nQuestion: {q}".format(p=passages, q=question)},
+        {"role": "user", "content": f"Passages:\n\n{passages}\n\nQuestion: {question}"},
     ]
 
 
@@ -114,23 +109,19 @@ def _call_model(question: str, chunks: Sequence[Chunk], settings: ModelSettings)
         response = _post_chat(url, _request_body(question, chunks, settings), settings.timeout_seconds)
     except requests.Timeout as exc:
         raise ModelUnavailableError(
-            "Ollama didn't respond within {t} seconds.".format(t=settings.timeout_seconds)
+            f"Ollama didn't respond within {settings.timeout_seconds} seconds."
         ) from exc
     except requests.RequestException as exc:
         raise ModelUnavailableError(
-            "Can't reach Ollama at {u}. Start Ollama, for example with `ollama serve`.".format(
-                u=settings.base_url
-            )
+            f"Can't reach Ollama at {settings.base_url}. Start Ollama, for example with `ollama serve`."
         ) from exc
 
     if response.status_code == 404 and "not found" in _ollama_error(response):
         raise ModelUnavailableError(
-            "Model {m!r} isn't installed in Ollama. Run `ollama pull {m}`.".format(m=settings.model)
+            f"Model {settings.model!r} isn't installed in Ollama. Run `ollama pull {settings.model}`."
         )
     if response.status_code != 200:
-        raise ModelUnavailableError(
-            "Ollama returned HTTP {s}: {e}".format(s=response.status_code, e=_ollama_error(response))
-        )
+        raise ModelUnavailableError(f"Ollama returned HTTP {response.status_code}: {_ollama_error(response)}")
     try:
         payload = response.json()
     except ValueError as exc:
@@ -195,8 +186,8 @@ def generate_answer(question: str, chunks: Sequence[Chunk], settings: ModelSetti
     prompt_tokens = payload.get("prompt_eval_count")
     if isinstance(prompt_tokens, int) and prompt_tokens >= settings.num_ctx:
         raise ModelResponseError(
-            "The prompt used {p} tokens, reaching the {n}-token context window, so it may have been "
-            "cut short.".format(p=prompt_tokens, n=settings.num_ctx)
+            f"The prompt used {prompt_tokens} tokens, reaching the {settings.num_ctx}-token context window, "
+            "so it may have been cut short."
         )
     found, answer, labels = _parse_answer(payload)
     cited = _cited_chunks(labels, chunks) if found else []

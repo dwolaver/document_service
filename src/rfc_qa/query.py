@@ -106,26 +106,26 @@ class QueryConfig:
 def _positive_integer(value: object, name: str) -> int:
     # bool is a subclass of int but is not a valid value here.
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise ConfigError("Config {n} must be a positive integer, got {v!r}.".format(n=name, v=value))
+        raise ConfigError(f"Config {name} must be a positive integer, got {value!r}.")
     return value
 
 
 def _positive_number(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
-        raise ConfigError("Config {n} must be a positive number, got {v!r}.".format(n=name, v=value))
+        raise ConfigError(f"Config {name} must be a positive number, got {value!r}.")
     return value
 
 
 def _non_empty_string(value: object, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
-        raise ConfigError("Config {n} must be a non-empty string, got {v!r}.".format(n=name, v=value))
+        raise ConfigError(f"Config {name} must be a non-empty string, got {value!r}.")
     return value
 
 
 def _section(data: dict[str, Any], name: str) -> dict[str, Any]:
     section = data.get(name)
     if not isinstance(section, dict):
-        raise ConfigError("Config {n} must be an object, got {v!r}.".format(n=name, v=section))
+        raise ConfigError(f"Config {name} must be an object, got {section!r}.")
     return section
 
 
@@ -139,9 +139,9 @@ def load_query_config(path: paths.ConfigFile) -> QueryConfig:
         with paths.as_traversable(path).open(encoding="utf-8") as config_file:
             data = json.load(config_file)
     except (OSError, ValueError) as exc:
-        raise ConfigError("Failed to read {p!r}: {e}".format(p=str(path), e=exc)) from exc
+        raise ConfigError(f"Failed to read {str(path)!r}: {exc}") from exc
     if not isinstance(data, dict):
-        raise ConfigError("Config {p!r} must be a JSON object.".format(p=str(path)))
+        raise ConfigError(f"Config {str(path)!r} must be a JSON object.")
 
     retrieval = _section(data, "retrieval")
     llm = _section(data, "llm")
@@ -200,8 +200,8 @@ def _chunk_token_target(index_path: str) -> int:
         return int(value)  # type: ignore[arg-type]
     except (TypeError, ValueError) as exc:
         raise IndexUnavailableError(
-            "The index at {p!r} doesn't record a usable target_chunk_tokens. "
-            "Rebuild it with `rfc-ingest`.".format(p=index_path)
+            f"The index at {index_path!r} doesn't record a usable target_chunk_tokens. "
+            "Rebuild it with `rfc-ingest`."
         ) from exc
 
 
@@ -210,15 +210,9 @@ def _budget_error(config: QueryConfig, chunk_tokens: int) -> str | None:
     if needed <= config.model.num_ctx:
         return None
     return (
-        "Config doesn't fit the context window: {l} passages x {c} tokens + {p} for the prompt + {a} "
-        "for the answer is {n} tokens, more than llm.num_ctx ({x})."
-    ).format(
-        l=config.retrieval_limit,
-        c=chunk_tokens,
-        p=PROMPT_ALLOWANCE_TOKENS,
-        a=config.model.max_answer_tokens,
-        n=needed,
-        x=config.model.num_ctx,
+        f"Config doesn't fit the context window: {config.retrieval_limit} passages x {chunk_tokens} tokens "
+        f"+ {PROMPT_ALLOWANCE_TOKENS} for the prompt + {config.model.max_answer_tokens} for the answer is "
+        f"{needed} tokens, more than llm.num_ctx ({config.model.num_ctx})."
     )
 
 
@@ -279,7 +273,7 @@ def query(user_query: str, *, config_dir: str | None = None, data_dir: str | Non
     :class:`TypeError`.
     """
     if not isinstance(user_query, str):
-        raise TypeError("Query must be a str, got {t}.".format(t=type(user_query).__name__))
+        raise TypeError(f"Query must be a str, got {type(user_query).__name__}.")
     if not user_query.strip():
         return _failure(
             QueryErrorCode.INVALID_QUERY,
@@ -302,38 +296,30 @@ def _print_success(response: QueryResponse) -> None:
         print("Sources:")
         for citation in response.citations:
             print(
-                "  RFC {rfc} section {section}: {title} ({id})".format(
-                    rfc=citation.rfc_number,
-                    section=citation.section_number,
-                    title=citation.section_title,
-                    id=citation.chunk_id,
-                )
+                f"  RFC {citation.rfc_number} section {citation.section_number}: "
+                f"{citation.section_title} ({citation.chunk_id})"
             )
     timings = response.timings
     if timings is not None and timings.cold_start and timings.model_load_ms is not None:
+        load_seconds = timings.model_load_ms / 1000
         print()
-        print(
-            "Note: the model was loaded for this query, which took {s:.1f} seconds.".format(
-                s=timings.model_load_ms / 1000
-            )
-        )
+        print(f"Note: the model was loaded for this query, which took {load_seconds:.1f} seconds.")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Console entry point: print the answer or error and return an exit code."""
+    default_data_dir = paths.default_data_dir()
     parser = argparse.ArgumentParser(description="Ask a question about RFCs.")
     parser.add_argument("query", help="The natural-language query to answer.")
     parser.add_argument(
         "--config-dir",
-        help="Directory holding {q}. Defaults to ${e}, then the packaged defaults.".format(
-            q=paths.QUERY_CONFIG_FILE, e=paths.CONFIG_DIR_ENV
-        ),
+        help=f"Directory holding {paths.QUERY_CONFIG_FILE}. Defaults to ${paths.CONFIG_DIR_ENV}, then the "
+        "packaged defaults.",
     )
     parser.add_argument(
         "--data-dir",
-        help="Directory holding {i}. Defaults to ${e}, then the user data directory ({d}).".format(
-            i=paths.INDEX_FILE, e=paths.DATA_DIR_ENV, d=paths.default_data_dir()
-        ),
+        help=f"Directory holding {paths.INDEX_FILE}. Defaults to ${paths.DATA_DIR_ENV}, then the user data "
+        f"directory ({default_data_dir}).",
     )
     args = parser.parse_args(argv)
 

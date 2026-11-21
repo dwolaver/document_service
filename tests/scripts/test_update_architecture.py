@@ -16,7 +16,11 @@ from scripts.update_architecture import (
 )
 
 PINNED = "claude-opus-5-5"
-SKILL = "---\nname: update-architecture\nmodel: {m}\n---\n\nInstructions.\n"
+
+
+def _skill_text(model):
+    """Return a skill file whose frontmatter pins ``model``."""
+    return f"---\nname: update-architecture\nmodel: {model}\n---\n\nInstructions.\n"
 
 
 def _result(usage, is_error=False, result="Report."):
@@ -44,13 +48,13 @@ def test_real_skill_pins_a_full_model_id():
 
 
 def test_reads_the_model_from_frontmatter(tmp_path):
-    assert read_pinned_model(_skill(tmp_path, SKILL.format(m="claude-sonnet-5-5"))) == "claude-sonnet-5-5"
+    assert read_pinned_model(_skill(tmp_path, _skill_text("claude-sonnet-5-5"))) == "claude-sonnet-5-5"
 
 
 @pytest.mark.parametrize("alias", ["opus", "sonnet", "claude-opus", "inherit", "default", "opus[1m]"])
 def test_alias_is_rejected(tmp_path, alias):
     with pytest.raises(ArchitectureError, match="full model ID"):
-        read_pinned_model(_skill(tmp_path, SKILL.format(m=alias)))
+        read_pinned_model(_skill(tmp_path, _skill_text(alias)))
 
 
 def test_missing_model_is_rejected(tmp_path):
@@ -147,7 +151,7 @@ def repo(tmp_path):
     root = tmp_path / "repo"
     skill = root / ".claude" / "skills" / "update-architecture"
     skill.mkdir(parents=True)
-    (skill / "SKILL.md").write_text(SKILL.format(m=PINNED), encoding="utf-8")
+    (skill / "SKILL.md").write_text(_skill_text(PINNED), encoding="utf-8")
     (root / "module.py").write_text("def public():\n    pass\n", encoding="utf-8")
     _git(root, "init", "-q")
     _git(root, "add", ".")
@@ -271,7 +275,7 @@ def test_existing_dirty_file_the_run_changes_is_rejected(repo, claude):
 
 def test_alias_refuses_before_running(repo, claude):
     skill = repo / ".claude" / "skills" / "update-architecture" / "SKILL.md"
-    skill.write_text(SKILL.format(m="opus"), encoding="utf-8")
+    skill.write_text(_skill_text("opus"), encoding="utf-8")
     with pytest.raises(ArchitectureError, match="full model ID"):
         update_architecture(str(repo), "v0.1.0")
     assert claude.calls == []

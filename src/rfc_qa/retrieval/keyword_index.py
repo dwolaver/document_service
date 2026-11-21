@@ -103,19 +103,17 @@ def build_index(chunks: Iterable[Chunk], metadata: Mapping[str, object], path: s
     except (OSError, sqlite3.Error) as exc:
         if tmp_path is not None and os.path.exists(tmp_path):
             os.remove(tmp_path)
-        raise IndexBuildError("Failed to build index {p!r}: {e}".format(p=path, e=exc)) from exc
+        raise IndexBuildError(f"Failed to build index {path!r}: {exc}") from exc
 
 
 def _unreadable(action: str, path: str, exc: sqlite3.Error) -> IndexUnavailableError:
-    return IndexUnavailableError(
-        "Failed to {a} index {p!r}: {e}. Rebuild it with rfc-ingest.".format(a=action, p=path, e=exc)
-    )
+    return IndexUnavailableError(f"Failed to {action} index {path!r}: {exc}. Rebuild it with rfc-ingest.")
 
 
 def _connect_read_only(path: str) -> sqlite3.Connection:
     """Open an existing index. SQLite would otherwise create an empty file at a missing path."""
     if not os.path.isfile(path):
-        raise IndexUnavailableError("Index not found: {p!r}. Run rfc-ingest to build it.".format(p=path))
+        raise IndexUnavailableError(f"Index not found: {path!r}. Run rfc-ingest to build it.")
     uri = pathlib.Path(path).resolve().as_uri() + "?mode=ro"
     try:
         return sqlite3.connect(uri, uri=True)
@@ -140,7 +138,7 @@ def read_metadata(path: str) -> dict[str, str]:
 def _to_match_expression(query_text: str) -> str:
     """Quote each token, so that user text can't be read as FTS query syntax."""
     tokens = re.findall(r"\w+", query_text)
-    return " OR ".join('"{t}"'.format(t=token) for token in tokens)
+    return " OR ".join(f'"{token}"' for token in tokens)
 
 
 def search(path: str, query_text: str, limit: int = DEFAULT_LIMIT) -> list[SearchResult]:
@@ -172,13 +170,13 @@ def _excerpt(text: str) -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Console entry point: print matching chunks and return an exit code."""
+    default_data_dir = paths.default_data_dir()
     parser = argparse.ArgumentParser(description="Search the RFC keyword index.")
     parser.add_argument("query", help="The search text.")
     parser.add_argument(
         "--data-dir",
-        help="Directory holding {i}. Defaults to ${e}, then the user data directory ({d}).".format(
-            i=paths.INDEX_FILE, e=paths.DATA_DIR_ENV, d=paths.default_data_dir()
-        ),
+        help=f"Directory holding {paths.INDEX_FILE}. Defaults to ${paths.DATA_DIR_ENV}, then the user data "
+        f"directory ({default_data_dir}).",
     )
     parser.add_argument("--index", help="Path to the index file, instead of the one in the data directory.")
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="Maximum results.")
@@ -194,12 +192,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for result in results:
         chunk = result.chunk
         print(
-            "{id}  RFC {rfc} section {section}: {title}".format(
-                id=chunk.chunk_id,
-                rfc=chunk.rfc_number,
-                section=chunk.section_number,
-                title=chunk.section_title,
-            )
+            f"{chunk.chunk_id}  RFC {chunk.rfc_number} section {chunk.section_number}: {chunk.section_title}"
         )
         print("    " + _excerpt(chunk.text))
     if not results:

@@ -31,7 +31,7 @@ def test_paragraphs_are_packed_together_up_to_the_maximum():
 
 
 def test_oversized_paragraph_splits_between_lines():
-    lines = ["line {n} ".format(n=n) + "x" * 30 for n in range(6)]
+    lines = [f"line {n} " + "x" * 30 for n in range(6)]
     parts = split_text("\n".join(lines), 100)
     assert len(parts) > 1
     for part in parts:
@@ -46,7 +46,7 @@ def test_line_longer_than_the_maximum_is_cut():
 
 
 def test_parts_stay_within_the_maximum_and_keep_all_text_in_order():
-    paragraphs = ["para{n} ".format(n=n) + "word " * (n * 7 % 40 + 1) for n in range(30)]
+    paragraphs = [f"para{n} " + "word " * (n * 7 % 40 + 1) for n in range(30)]
     text = "\n\n".join(p.strip() for p in paragraphs)
     parts = split_text(text, 100)
     assert all(len(part) <= 100 for part in parts)

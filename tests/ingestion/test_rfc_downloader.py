@@ -27,16 +27,17 @@ CLASSIC_BODY = b"\n\nRFC:  791\n\nINTERNET PROTOCOL\n\nBody of the document.\n"
 
 
 def _patch_get(monkeypatch, response=None, exc=None):
-    calls = {"count": 0}
+    """Replace requests.get, returning the list of URLs it's called with."""
+    urls: list[str] = []
 
     def fake_get(url, **kwargs):
-        calls["count"] += 1
+        urls.append(url)
         if exc is not None:
             raise exc
         return response
 
     monkeypatch.setattr(requests, "get", fake_get)
-    return calls
+    return urls
 
 
 def _fail_if_called(monkeypatch):
@@ -69,7 +70,7 @@ def test_non_integer_number_is_a_type_error(monkeypatch, tmp_path, capsys, bad):
 @pytest.mark.parametrize("bad", [0, -5])
 def test_number_below_1_is_a_value_error(monkeypatch, tmp_path, capsys, bad):
     _fail_if_called(monkeypatch)
-    with pytest.raises(ValueError, match="Invalid RFC number {b}".format(b=bad)):
+    with pytest.raises(ValueError, match=f"Invalid RFC number {bad}"):
         download_rfc(bad, str(tmp_path))
     assert list(tmp_path.iterdir()) == []
     assert capsys.readouterr() == ("", "")
@@ -84,9 +85,10 @@ def test_caller_bugs_are_not_rfc_qa_errors(monkeypatch, tmp_path):
 
 
 def test_accepts_valid_integer_and_returns_the_path(monkeypatch, tmp_path):
-    _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY))}))
+    urls = _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(len(MODERN_BODY))}))
     assert download_rfc(9110, str(tmp_path)) == str(tmp_path / "rfc9110.txt")
     assert (tmp_path / "rfc9110.txt").read_bytes() == MODERN_BODY
+    assert urls == ["https://www.rfc-editor.org/rfc/rfc9110.txt"]
 
 
 # --- Missing directory ---
@@ -150,8 +152,9 @@ def test_truncated_body_gives_both_sizes(monkeypatch, tmp_path, capsys):
     _patch_get(monkeypatch, FakeResponse(200, MODERN_BODY, {"Content-Length": str(declared)}))
     with pytest.raises(DownloadError) as excinfo:
         download_rfc(9110, str(tmp_path))
-    assert str(excinfo.value) == "RFC 9110: truncated download (Content-Length {d}, received {r}).".format(
-        d=declared, r=len(MODERN_BODY)
+    assert (
+        str(excinfo.value)
+        == f"RFC 9110: truncated download (Content-Length {declared}, received {len(MODERN_BODY)})."
     )
     assert list(tmp_path.iterdir()) == []
     assert capsys.readouterr() == ("", "")

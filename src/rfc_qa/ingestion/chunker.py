@@ -57,10 +57,8 @@ def chunk_sections(
     for section in sections:
         seen_numbers[section.number] += 1
         occurrence = seen_numbers[section.number]
-        suffix = "" if occurrence == 1 else "-{n}".format(n=occurrence)
+        suffix = "" if occurrence == 1 else f"-{occurrence}"
         for position, text in enumerate(split_text(section.text, max_chars)):
-            chunk_id = "rfc{rfc}-s{section}{suffix}-p{position}".format(
-                rfc=rfc_number, section=section.number, suffix=suffix, position=position
-            )
+            chunk_id = f"rfc{rfc_number}-s{section.number}{suffix}-p{position}"
             chunks.append(Chunk(chunk_id, rfc_number, rfc_title, family, section.number, section.title, text))
     return chunks

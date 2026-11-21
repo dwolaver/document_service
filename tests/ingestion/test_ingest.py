@@ -189,7 +189,7 @@ def workspace(tmp_path, monkeypatch):
     def fake_download(number, directory):
         downloads.append(number)
         name = {793: "early", 9110: "unpaginated"}[number]
-        path = pathlib.Path(directory) / "rfc{n}.txt".format(n=number)
+        path = pathlib.Path(directory) / f"rfc{number}.txt"
         _copy_fixture(name, path)
         return str(path)
 
@@ -282,7 +282,7 @@ def test_summary_is_printed(workspace, capsys):
 
 
 def _failing_download(number, directory):
-    raise DownloadError("RFC {n}: unexpected HTTP status 503.".format(n=number))
+    raise DownloadError(f"RFC {number}: unexpected HTTP status 503.")
 
 
 def test_failed_download_prints_its_reason_once(workspace, monkeypatch, capsys):
@@ -327,13 +327,13 @@ def test_unreadable_rfc_names_the_rfc(workspace, monkeypatch, capsys):
 
 def test_failed_index_build_prints_once(workspace, monkeypatch, capsys):
     def fail_build(chunks, metadata, path):
-        raise IndexBuildError("Failed to build index {p!r}: disk full".format(p=path))
+        raise IndexBuildError(f"Failed to build index {path!r}: disk full")
 
     monkeypatch.setattr(ingest, "build_index", fail_build)
     assert main(_main_args(workspace)) == 1
     assert capsys.readouterr() == (
         "",
-        "Failed to build index {p!r}: disk full\n".format(p=workspace["index"]),
+        f"Failed to build index {workspace['index']!r}: disk full\n",
     )
 
 
@@ -341,7 +341,7 @@ def test_rfc_with_no_chunks_names_the_rfc(workspace, capsys):
     rfc_dir = os.path.join(workspace["data_dir"], "rfcs")
     os.makedirs(rfc_dir)
     for number in (793, 9110):
-        with open(os.path.join(rfc_dir, "rfc{n}.txt".format(n=number)), "w") as rfc_file:
+        with open(os.path.join(rfc_dir, f"rfc{number}.txt"), "w") as rfc_file:
             rfc_file.write("no structure here\n")
     assert main(_main_args(workspace)) == 1
     assert capsys.readouterr() == ("", "RFC 793: produced no chunks.\n")
@@ -441,7 +441,7 @@ def test_missing_config_directory_fails_before_downloading(workspace, monkeypatc
     assert main(args) == 1
     err = capsys.readouterr().err
     assert missing in err
-    assert "(from {s})".format(s=source) in err
+    assert f"(from {source})" in err
     assert workspace["downloads"] == []
     assert not os.path.exists(workspace["index"])
 
