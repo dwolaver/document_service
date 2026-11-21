@@ -33,6 +33,11 @@ rules:
       Depart from that flow only when a change has work that can only happen
       after merge. State the reason in the Workflow follow-up section, and add
       the merge-before-archive label to its pull request.
+    - >-
+      Include a tracked task that adds the change's entry to CHANGELOG.md under
+      [Unreleased], in the Keep a Changelog category that fits, such as Added,
+      Changed, Fixed or Removed. Write the entry for users and contributors: what
+      changed for them, not how it was done.
 skillsScope: project
 
 # Per-operation guidance (optional)

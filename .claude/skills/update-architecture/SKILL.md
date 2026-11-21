@@ -58,10 +58,10 @@ Read what you need to describe the system accurately:
 
 - The `rfc_qa` package in `src/rfc_qa/` and its subpackages, and `scripts/`.
 - Configuration and data definitions: `pyproject.toml`, which defines the commands,
-  `src/rfc_qa/config/corpus.json`, `src/rfc_qa/config/ingest.json`, `src/rfc_qa/config/query.json`,
+  `src/rfc_qa/config/corpus.toml`, `src/rfc_qa/config/ingest.toml`, `src/rfc_qa/config/query.toml`,
   `requirements.txt`, `requirements-dev.txt` and `pytest.ini`.
 - `.github/workflows/`, for how changes are checked.
-- `README.md`, only to see which roadmap steps are planned, so that you don't describe them.
+- `docs/roadmap.md`, only to see which roadmap steps are planned, so that you don't describe them.
 - `openspec/changes/archive/*/design.md`, only for the reasons behind key decisions. When a design
   and the code disagree, the code wins.
 
@@ -72,6 +72,8 @@ the code, not the tests.
 
 ```
 # Architecture
+
+[Back to README](README.md)
 
 ## Overview
 ## Workflows
