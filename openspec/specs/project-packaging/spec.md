@@ -122,8 +122,8 @@ Messages that tell the user to build the index SHALL name the `rfc-ingest` comma
 
 ### Requirement: Read configuration from a configuration directory
 
-The corpus manifest (`corpus.json`), the ingestion configuration (`ingest.json`) and the query
-configuration (`query.json`) SHALL be read from one configuration directory. By default this is the
+The corpus manifest (`corpus.toml`), the ingestion configuration (`ingest.toml`) and the query
+configuration (`query.toml`) SHALL be read from one configuration directory. By default this is the
 set of configuration files installed with the package, whatever the working directory. No
 configuration file or configuration directory SHALL remain at the repository root.
 
@@ -135,7 +135,7 @@ configuration file or configuration directory SHALL remain at the repository roo
 #### Scenario: No configuration at the root
 
 - **WHEN** the repository root is listed
-- **THEN** it contains no `config/` directory, and no `corpus.json`, `ingest_config.json` or `query_config.json`
+- **THEN** it contains no `config/` directory, and no `corpus.toml`, `ingest.toml` or `query.toml`, nor any of the earlier JSON configuration files
 
 #### Scenario: Selected directory missing a file
 
@@ -259,3 +259,36 @@ directory.
 
 - **WHEN** a wheel built from the repository is installed into a fresh environment, and `rfc-ingest`, `rfc-search` and `rfc-query` are run from a directory unrelated to the repository, with no overrides
 - **THEN** each command reads its configuration from the installed package and its data from the user data directory, and behaves as it does in an editable install
+
+### Requirement: Write the configuration files in TOML
+
+The corpus manifest, the ingestion configuration and the query configuration SHALL be TOML documents.
+A file that isn't valid TOML SHALL be rejected as a configuration error, with a message naming the
+file and the line and column of the problem.
+
+#### Scenario: Malformed file
+
+- **WHEN** a configuration file the command reads isn't valid TOML
+- **THEN** the command fails with a configuration error naming the file and the line and column of the problem, and reads no other setting from it
+
+#### Scenario: JSON file given
+
+- **WHEN** `--corpus`, `--config` or a configuration directory supplies a file in JSON
+- **THEN** the command fails with a configuration error naming the file, rather than reading it
+
+### Requirement: Describe every setting in the configuration files
+
+Each packaged configuration file SHALL begin with a comment saying what it configures and which
+command reads it. Each section SHALL have a comment saying what it covers. Each setting SHALL have a
+comment giving its meaning and its unit or allowed values, and naming any other setting it has to
+agree with. The manifest SHALL describe the fields of an entry once, above the list of RFCs.
+
+#### Scenario: Commented settings
+
+- **WHEN** a packaged configuration file is read
+- **THEN** every section and every setting in it has a comment describing it
+
+#### Scenario: Comments don't change the settings
+
+- **WHEN** the comments in a configuration file are edited or removed
+- **THEN** the settings read from it are the same
